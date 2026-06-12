@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Consultar mi boleta — Bingo</title>
+  <link rel="stylesheet" href="css/main.css" />
+  <style>
+    .back-btn { display:inline-flex; align-items:center; gap:6px;
+                color:#CECBF6; font-size:14px; text-decoration:none; margin-bottom:16px }
+    .carton-card { background:#fff; border-radius:12px; border:0.5px solid rgba(0,0,0,.1);
+                   padding:18px 16px; margin-bottom:10px }
+    .carton-codigo { font-size:22px; font-weight:700; color:#3C3489; letter-spacing:2px }
+    .carton-sorteo { font-size:13px; color:#888; margin:4px 0 10px }
+    .carton-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:4px; margin:12px 0 }
+    .celda { background:#EEEDFE; border-radius:6px; aspect-ratio:1;
+             display:flex; align-items:center; justify-content:center;
+             font-size:14px; font-weight:700; color:#3C3489 }
+    .celda.libre { background:#F0997B; color:#712B13; font-size:11px }
+    .letras { display:grid; grid-template-columns:repeat(5,1fr); gap:4px; margin-bottom:4px }
+    .letra { background:#7F77DD; color:#fff; border-radius:6px; aspect-ratio:1;
+             display:flex; align-items:center; justify-content:center;
+             font-weight:700; font-size:14px }
+    .btn-pdf { display:block; width:100%; background:#7F77DD; color:#fff;
+               border:none; border-radius:10px; padding:12px; font-size:14px;
+               font-weight:500; cursor:pointer; text-align:center; text-decoration:none;
+               margin-top:10px }
+    .empty-state { text-align:center; padding:40px 20px; color:#888 }
+    .empty-state .icon { font-size:40px; margin-bottom:12px }
+  </style>
+</head>
+<body>
+  <header class="hero" style="padding-bottom:20px">
+    <a href="index.html" class="back-btn">← Volver</a>
+    <h1 style="font-size:20px">Consultar mi boleta</h1>
+    <p class="fecha">Ingresa tu teléfono o código de cartón</p>
+  </header>
+
+  <main class="container">
+    <div class="card">
+      <div class="form-group">
+        <label for="busqueda">Número de WhatsApp o código de boleta</label>
+        <input type="text" id="busqueda"
+               placeholder="Ej: 3101234567 o ABC12345"
+               autocomplete="off" />
+      </div>
+      <button class="cta-btn" id="btn-buscar" style="margin-bottom:0">
+        Buscar boleta
+      </button>
+    </div>
+
+    <div id="resultado"></div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script>
+    document.getElementById('btn-buscar').addEventListener('click', buscar);
+    document.getElementById('busqueda').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') buscar();
+    });
+
+    async function buscar() {
+      const q = document.getElementById('busqueda').value.trim();
+      if (!q) return;
+
+      const btn = document.getElementById('btn-buscar');
+      btn.disabled = true;
+      btn.textContent = 'Buscando...';
+      document.getElementById('resultado').innerHTML = '';
+
+      try {
+        const data = await Api.consultarBoleta(q);
+        renderResultados(data.resultados);
+      } catch (err) {
+        document.getElementById('resultado').innerHTML = `
+          <div class="empty-state">
+            <div class="icon">🔍</div>
+            <p><strong>No encontramos ninguna boleta</strong></p>
+            <p style="font-size:13px;margin-top:6px">${err.message}</p>
+          </div>`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Buscar boleta';
+      }
+    }
+
+    function renderResultados(cartones) {
+      const contenedor = document.getElementById('resultado');
+      if (!cartones.length) {
+        contenedor.innerHTML = `<div class="empty-state">
+          <div class="icon">🎴</div><p>No hay boletas con ese dato</p></div>`;
+        return;
+      }
+
+      contenedor.innerHTML = `<p style="font-size:13px;color:#888;margin:8px 0 12px">
+        ${cartones.length} boleta(s) encontrada(s)</p>`;
+
+      cartones.forEach(c => {
+        const card = document.createElement('div');
+        card.className = 'carton-card';
+
+        const estadoBadge = c.estado_pago === 'aprobado'
+          ? '<span class="badge badge-approved">✓ Aprobado</span>'
+          : '<span class="badge badge-pending">⏳ Pendiente</span>';
+
+        let gridHTML = '';
+        if (c.numeros) {
+          const letras = ['B','I','N','G','O'];
+          gridHTML = `<div class="letras">${letras.map(l=>`<div class="letra">${l}</div>`).join('')}</div>
+            <div class="carton-grid">`;
+          for (let row = 0; row < 5; row++) {
+            for (let col = 0; col < 5; col++) {
+              const val = c.numeros[row][col];
+              gridHTML += val === null
+                ? `<div class="celda libre">LIBRE</div>`
+                : `<div class="celda">${val}</div>`;
+            }
+          }
+          gridHTML += '</div>';
+        }
+
+        card.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div class="carton-codigo">${c.codigo_unico}</div>
+              <div class="carton-sorteo">${c.sorteo} · ${formatFecha(c.fecha_sorteo)}</div>
+            </div>
+            ${estadoBadge}
+          </div>
+          ${gridHTML}
+          ${c.pdf_url ? `<a href="${c.pdf_url}" target="_blank" class="btn-pdf">
+            📄 Descargar PDF del cartón</a>` : ''}
+        `;
+        contenedor.appendChild(card);
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — Bingo</title>
+  <link rel="stylesheet" href="../css/main.css" />
+  <style>
+    body { background:#1E1B4B; min-height:100vh }
+
+    /* ── Login ───────────────────────────── */
+    #pantalla-login {
+      display:flex; align-items:center; justify-content:center;
+      min-height:100vh; padding:20px
+    }
+    .login-box {
+      background:#fff; border-radius:16px; padding:32px 24px;
+      width:100%; max-width:360px; text-align:center
+    }
+    .login-box h1 { font-size:22px; margin-bottom:4px; color:#3C3489 }
+    .login-box p  { font-size:13px; color:#888; margin-bottom:24px }
+
+    /* ── Dashboard ───────────────────────── */
+    #pantalla-dashboard { display:none }
+    .topbar {
+      background:#3C3489; color:#CECBF6;
+      padding:14px 16px;
+      display:flex; justify-content:space-between; align-items:center
+    }
+    .topbar strong { color:#fff; font-size:15px }
+    .btn-logout {
+      font-size:12px; color:#CECBF6; background:none;
+      border:0.5px solid #534AB7; border-radius:6px;
+      padding:4px 10px; cursor:pointer
+    }
+    .admin-container { max-width:680px; margin:0 auto; padding:16px }
+
+    .section-title {
+      font-size:14px; font-weight:500; color:#444;
+      margin:20px 0 10px; padding-bottom:6px;
+      border-bottom:0.5px solid rgba(0,0,0,.08)
+    }
+
+    /* Sorteo activo card */
+    .sorteo-activo {
+      background:#fff; border-radius:12px;
+      border:0.5px solid rgba(0,0,0,.1); padding:16px;
+      margin-bottom:16px
+    }
+    .progress-wrap { background:#EEEDFE; border-radius:20px; height:10px; overflow:hidden; margin:10px 0 6px }
+    .progress-bar  { background:#7F77DD; height:100%; border-radius:20px; transition:width .3s }
+    .progress-meta { display:flex; justify-content:space-between; font-size:12px; color:#888 }
+
+    /* Botones acción */
+    .actions-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px }
+    .btn-action {
+      border:0.5px solid rgba(0,0,0,.12); border-radius:8px;
+      padding:10px 14px; font-size:13px; font-weight:500;
+      background:#fff; cursor:pointer; color:#444;
+      display:flex; align-items:center; gap:6px
+    }
+    .btn-action.primary { background:#7F77DD; color:#fff; border-color:#7F77DD }
+    .btn-action.success { background:#1D9E75; color:#fff; border-color:#1D9E75 }
+
+    /* Tabla pagos */
+    .pagos-lista { background:#fff; border-radius:12px; border:0.5px solid rgba(0,0,0,.1); overflow:hidden }
+    .pago-item { display:flex; align-items:center; gap:10px; padding:12px 14px; border-bottom:0.5px solid rgba(0,0,0,.06) }
+    .pago-item:last-child { border-bottom:none }
+    .pago-meta { flex:1; min-width:0 }
+    .pago-meta strong { font-size:14px; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+    .pago-meta span   { font-size:12px; color:#888 }
+    .pago-acciones { display:flex; gap:6px; flex-shrink:0 }
+
+    /* Modal comprobante */
+    .modal-overlay {
+      position:fixed; inset:0; background:rgba(0,0,0,.6);
+      display:flex; align-items:center; justify-content:center;
+      z-index:100; padding:20px
+    }
+    .modal-box {
+      background:#fff; border-radius:16px; padding:20px;
+      max-width:500px; width:100%; max-height:90vh; overflow-y:auto
+    }
+    .modal-box img { width:100%; border-radius:8px; margin:12px 0 }
+    .modal-close { float:right; background:none; border:none; font-size:20px; cursor:pointer }
+
+    /* Crear sorteo form */
+    #form-sorteo { background:#fff; border-radius:12px; border:0.5px solid rgba(0,0,0,.1); padding:16px; margin-bottom:16px }
+    #form-sorteo { display:none }
+
+    .empty-pagos { text-align:center; padding:32px; color:#888; font-size:14px }
+  </style>
+</head>
+<body>
+
+<!-- ── PANTALLA LOGIN ──────────────────────────────────── -->
+<div id="pantalla-login">
+  <div class="login-box">
+    <div style="font-size:36px;margin-bottom:8px">🎱</div>
+    <h1>Panel Admin</h1>
+    <p>Sistema de venta de boletas de bingo</p>
+    <div class="form-group" style="text-align:left">
+      <label for="login-email">Correo</label>
+      <input type="email" id="login-email" placeholder="admin@bingo.com" />
+    </div>
+    <div class="form-group" style="text-align:left">
+      <label for="login-pass">Contraseña</label>
+      <input type="password" id="login-pass" placeholder="••••••••" />
+    </div>
+    <div id="login-error" style="color:#D85A30;font-size:13px;margin-bottom:10px;display:none"></div>
+    <button class="cta-btn" id="btn-login" style="margin-bottom:0">Ingresar</button>
+  </div>
+</div>
+
+<!-- ── PANTALLA DASHBOARD ──────────────────────────────── -->
+<div id="pantalla-dashboard">
+  <div class="topbar">
+    <div>
+      <strong>🎱 Panel Bingo</strong>
+      <span id="admin-nombre" style="font-size:12px;color:#AFA9EC;margin-left:8px"></span>
+    </div>
+    <button class="btn-logout" id="btn-logout">Cerrar sesión</button>
+  </div>
+
+  <div class="admin-container">
+
+    <!-- Métricas -->
+    <div class="metrics-grid" id="metricas">
+      <div class="metric-card">
+        <div class="metric-label">Boletas vendidas</div>
+        <div class="metric-value" id="m-boletas">—</div>
+        <div class="metric-sub" id="m-boletas-sub"></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Dinero recaudado</div>
+        <div class="metric-value" id="m-dinero">—</div>
+        <div class="metric-sub">aprobados</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Compradores</div>
+        <div class="metric-value" id="m-compradores">—</div>
+        <div class="metric-sub">únicos</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Pagos pendientes</div>
+        <div class="metric-value" id="m-pendientes" style="color:#EF9F27">—</div>
+        <div class="metric-sub">por revisar</div>
+      </div>
+    </div>
+
+    <!-- Sorteo activo -->
+    <div class="section-title">Sorteo activo</div>
+    <div class="sorteo-activo" id="sorteo-info">
+      <p style="color:#888;font-size:14px">Cargando...</p>
+    </div>
+
+    <!-- Acciones -->
+    <div class="actions-row">
+      <button class="btn-action primary" id="btn-toggle-form">
+        ＋ Nuevo sorteo
+      </button>
+      <button class="btn-action" id="btn-recargar">
+        ↻ Recargar
+      </button>
+      <a href="../../index.html" target="_blank" class="btn-action">
+        👁 Ver página pública
+      </a>
+    </div>
+
+    <!-- Form crear sorteo (oculto por defecto) -->
+    <div id="form-sorteo">
+      <div class="section-title" style="margin-top:0">Crear nuevo sorteo</div>
+      <div class="form-group">
+        <label>Nombre del sorteo</label>
+        <input type="text" id="s-nombre" placeholder="Gran Bingo de la Fortuna" />
+      </div>
+      <div class="form-group">
+        <label>Descripción del premio</label>
+        <input type="text" id="s-premio" placeholder="$20.000.000 en efectivo" />
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label>Fecha y hora del sorteo</label>
+          <input type="datetime-local" id="s-fecha" />
+        </div>
+        <div class="form-group">
+          <label>Precio por boleta ($)</label>
+          <input type="number" id="s-precio" placeholder="5000" min="0" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Total de cartones disponibles</label>
+        <input type="number" id="s-total" placeholder="100" min="1" />
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-action success" id="btn-crear-sorteo">Crear sorteo</button>
+        <button class="btn-action" id="btn-cancelar-form">Cancelar</button>
+      </div>
+    </div>
+
+    <!-- Pagos por revisar -->
+    <div class="section-title">Pagos por revisar</div>
+    <div class="pagos-lista" id="pagos-lista">
+      <div class="empty-pagos">Cargando pagos...</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Modal comprobante -->
+<div class="modal-overlay" id="modal" style="display:none">
+  <div class="modal-box">
+    <button class="modal-close" id="modal-close">✕</button>
+    <h3 id="modal-titulo" style="margin-bottom:8px">Comprobante</h3>
+    <p id="modal-detalle" style="font-size:13px;color:#888;margin-bottom:8px"></p>
+    <img id="modal-img" src="" alt="Comprobante de pago" />
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn-aprobar" id="modal-aprobar" style="flex:1;padding:12px;font-size:14px">
+        ✓ Aprobar y enviar cartón
+      </button>
+      <button class="btn-rechazar" id="modal-rechazar" style="flex:1;padding:12px;font-size:14px">
+        ✕ Rechazar
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/api.js"></script>
+<script src="../js/admin.js"></script>
+</body>
+</html>

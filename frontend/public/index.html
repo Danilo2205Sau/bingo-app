@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bingo — Compra tus boletas</title>
+  <link rel="stylesheet" href="css/main.css" />
+</head>
+<body>
+
+  <!-- HERO -->
+  <header class="hero" id="hero-section">
+    <div class="hero-badge" id="sorteo-estado">Cargando sorteo...</div>
+    <h1 id="sorteo-nombre">Gran Bingo</h1>
+    <div class="premio" id="sorteo-premio">$0</div>
+    <p class="fecha" id="sorteo-fecha"></p>
+    <div class="boletas-bar">
+      <span>Boletas disponibles</span>
+      <span id="boletas-restantes">...</span>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- PASO 1: Cantidad -->
+    <section class="card">
+      <h2 class="step-label"><span class="step-num">1</span> Escoge tu cantidad</h2>
+      <div class="qty-grid" id="qty-grid">
+        <button class="qty-btn" data-qty="1" data-precio="0">
+          <span class="qty-num">1</span>
+          <span class="qty-price" id="price-1">...</span>
+        </button>
+        <button class="qty-btn active" data-qty="2" data-precio="0">
+          <span class="qty-num">2</span>
+          <span class="qty-price" id="price-2">...</span>
+        </button>
+        <button class="qty-btn" data-qty="5" data-precio="0">
+          <span class="qty-num">5</span>
+          <span class="qty-price" id="price-5">...</span>
+        </button>
+        <button class="qty-btn" data-qty="10" data-precio="0">
+          <span class="qty-num">10</span>
+          <span class="qty-price" id="price-10">...</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- PASO 2: Datos -->
+    <section class="card">
+      <h2 class="step-label"><span class="step-num">2</span> Tus datos</h2>
+      <div class="form-group">
+        <label for="nombre">Nombre completo</label>
+        <input type="text" id="nombre" placeholder="Ej: María García" autocomplete="name" />
+      </div>
+      <div class="form-group">
+        <label for="telefono">WhatsApp (recibirás tu cartón aquí)</label>
+        <div class="input-prefix">
+          <span>+57</span>
+          <input type="tel" id="telefono" placeholder="310 000 0000"
+                 maxlength="10" inputmode="numeric" autocomplete="tel" />
+        </div>
+      </div>
+    </section>
+
+    <!-- PASO 3: Pago -->
+    <section class="card">
+      <h2 class="step-label"><span class="step-num">3</span> Método de pago</h2>
+      <div class="pay-grid">
+        <button class="pay-btn active" data-metodo="nequi">
+          <span class="pay-icon">N</span>
+          <span>Nequi</span>
+        </button>
+        <button class="pay-btn" data-metodo="bancolombia">
+          <span class="pay-icon">B</span>
+          <span>Bancolombia</span>
+        </button>
+        <button class="pay-btn" data-metodo="transferencia">
+          <span class="pay-icon">T</span>
+          <span>Transferencia</span>
+        </button>
+      </div>
+      <div class="pago-info card-inner" id="pago-info">
+        <p class="pago-titulo" id="pago-titulo">Nequi</p>
+        <p class="pago-num" id="pago-numero">310 000 0000</p>
+        <p class="pago-nombre" id="pago-nombre-titular">Nombre del titular</p>
+        <p class="pago-hint">Envía exactamente <strong id="total-hint">$0</strong> y sube el comprobante.</p>
+      </div>
+    </section>
+
+    <!-- PASO 4: Comprobante -->
+    <section class="card">
+      <h2 class="step-label"><span class="step-num">4</span> Sube tu comprobante</h2>
+      <label class="upload-zone" for="comprobante" id="upload-zone">
+        <div class="upload-icon">&#8593;</div>
+        <p>Toca para subir captura de pago</p>
+        <span class="upload-hint">JPG, PNG o PDF — máx. 5 MB</span>
+        <input type="file" id="comprobante" accept="image/*,.pdf" style="display:none" />
+      </label>
+      <div class="preview-wrap" id="preview-wrap" style="display:none">
+        <img id="preview-img" src="" alt="Vista previa del comprobante" />
+        <button class="btn-remove" id="btn-remove-file">Cambiar archivo</button>
+      </div>
+    </section>
+
+    <!-- RESUMEN -->
+    <div class="total-bar">
+      <span>Total a pagar</span>
+      <span id="total-display">$0</span>
+    </div>
+
+    <button class="cta-btn" id="btn-comprar">Comprar ahora</button>
+
+    <!-- MENSAJE DE ÉXITO -->
+    <div class="success-msg" id="success-msg" style="display:none">
+      <div class="success-icon">&#10003;</div>
+      <h3>Compra registrada</h3>
+      <p>El administrador revisará tu comprobante. Recibirás tu cartón por WhatsApp en minutos.</p>
+      <p id="success-id" style="font-size:13px;color:#888;margin-top:8px"></p>
+    </div>
+
+    <!-- ENLACE CONSULTA -->
+    <div style="text-align:center;margin:24px 0 32px">
+      <a href="consulta.html" class="link-consulta">¿Ya compraste? Consulta tu boleta aquí</a>
+    </div>
+
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/compra.js"></script>
+</body>
+</html>

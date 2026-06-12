@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  # Base de datos PostgreSQL
+  db:
+    image: postgres:16-alpine
+    container_name: bingo_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bingo_user
+      POSTGRES_PASSWORD: bingo_pass
+      POSTGRES_DB: bingo_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/src/migrations/001_init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # Backend Node.js
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bingo_backend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://bingo_user:bingo_pass@db:5432/bingo_db
+      NODE_ENV: development
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - db
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:
