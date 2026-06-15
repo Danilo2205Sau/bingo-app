@@ -11,7 +11,13 @@ cloudinary.config({
 async function subirBuffer(buffer, publicId) {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
-      { resource_type: 'raw', public_id: publicId, format: 'pdf' },
+      {
+        resource_type: 'raw',
+        public_id: publicId,
+        format: 'pdf',
+        type: 'upload',
+        access_mode: 'public',
+      },
       (err, result) => {
         if (err) return reject(err);
         resolve(result.secure_url);
