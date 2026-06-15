@@ -1,9 +1,14 @@
 FROM node:18-alpine
 
+RUN apk add --no-cache \
+    fontconfig \
+    freetype \
+    ttf-dejavu
+
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --production --legacy-peer-depsgit add Dockerfile
+RUN npm install --legacy-peer-deps
 
 COPY . .
 
