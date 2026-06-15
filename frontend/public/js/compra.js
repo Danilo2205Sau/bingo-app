@@ -29,7 +29,7 @@ async function cargarSorteo() {
     document.getElementById('sorteo-nombre').textContent  = sorteoActivo.nombre;
     document.getElementById('sorteo-estado').textContent  = '🔥 Sorteo activo';
     document.getElementById('sorteo-premio').textContent  =
-      formatCOP(sorteoActivo.premio_descripcion || '¡Gran Premio!');
+      sorteoActivo.premio_descripcion || '¡Gran Premio!';
     document.getElementById('sorteo-fecha').textContent   =
       formatFecha(sorteoActivo.fecha_sorteo);
 
