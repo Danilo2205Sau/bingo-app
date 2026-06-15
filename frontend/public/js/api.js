@@ -3,7 +3,7 @@
 // Todas las llamadas al backend van por aquí
 // ============================================
 
-const API_URL = 'bingo-app-production-9452.up.railway.app'; // Cambiar en producción
+const API_URL = 'https://bingo-app-production-9452.up.railway.app/api'; // Cambiar en producción
 
 const Api = {
 
