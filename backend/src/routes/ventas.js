@@ -6,7 +6,8 @@ const upload   = require('../middleware/upload');
 // POST /api/ventas — crear una venta (comprador llena el formulario)
 router.post('/', upload.single('comprobante'), async (req, res, next) => {
   try {
-    const { nombre, telefono, cantidad, metodo_pago, sorteo_id } = req.body;
+    const { nombre, telefono, cantidad, metodo_pago, sorteo_id,
+        referencia_pago, nombre_titular, monto_declarado } = req.body;
 
     if (!nombre || !telefono || !cantidad || !metodo_pago || !sorteo_id)
       return res.status(400).json({ error: 'Faltan campos requeridos' });
@@ -47,12 +48,19 @@ router.post('/', upload.single('comprobante'), async (req, res, next) => {
       comprobante_url = req.file.path; // multer-storage-cloudinary pone la URL aquí
     }
 
-    const { rows: venta } = await db.query(`
+   const { rows: venta } = await db.query(`
       INSERT INTO ventas
-        (comprador_id, sorteo_id, cantidad, total_pagado, metodo_pago, comprobante_url)
-      VALUES ($1,$2,$3,$4,$5,$6)
+        (comprador_id, sorteo_id, cantidad, total_pagado, metodo_pago,
+         comprobante_url, referencia_pago, nombre_titular, monto_declarado)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       RETURNING id, estado_pago, creado_en
-    `, [comprador_id, sorteo_id, cant, total, metodo_pago, comprobante_url]);
+    `, [
+      comprador_id, sorteo_id, cant, total, metodo_pago,
+      comprobante_url,
+      referencia_pago?.trim() || null,
+      nombre_titular?.trim() || null,
+      parseFloat(monto_declarado) || null,
+    ]);
 
     res.status(201).json({
       message: 'Compra registrada. El administrador revisará tu pago pronto.',

@@ -220,18 +220,14 @@ async function verComprobante(id) {
   const fila = document.getElementById(`pago-${id}`);
   if (!fila) return;
 
-  const nombre  = fila.querySelector('strong').textContent;
-  const detalle = fila.querySelectorAll('span')[0].textContent;
-
   ventaModal = id;
-  document.getElementById('modal-titulo').textContent  = nombre;
-  document.getElementById('modal-detalle').textContent = detalle;
-
+  document.getElementById('modal').style.display = 'flex';
+  document.getElementById('modal-titulo').textContent  = 'Cargando...';
+  document.getElementById('modal-detalle').textContent = '';
   const img = document.getElementById('modal-img');
   img.style.display = 'none';
   img.src = '';
-
-  document.getElementById('modal').style.display = 'flex';
+  document.getElementById('modal-validacion')?.remove();
 
   try {
     const token = sessionStorage.getItem('admin_token');
@@ -239,19 +235,71 @@ async function verComprobante(id) {
       headers: { Authorization: `Bearer ${token}` },
     });
     const ventas = await res.json();
-    const venta = ventas.find(v => v.id === id);
+    const v = ventas.find(venta => venta.id === id);
+    if (!v) return;
 
-    if (venta && venta.comprobante_url) {
-      img.src = venta.comprobante_url;
+    document.getElementById('modal-titulo').textContent  = v.comprador_nombre;
+    document.getElementById('modal-detalle').textContent =
+      `${v.cantidad} boleta(s) · ${formatMetodo(v.metodo_pago)} · ${formatCOP(v.total_pagado)}`;
+
+    if (v.comprobante_url) {
+      img.src = v.comprobante_url;
       img.style.display = 'block';
     }
+
+    const alertaMonto = v.monto_declarado &&
+      Math.abs(parseFloat(v.monto_declarado) - parseFloat(v.total_pagado)) > 100;
+
+    img.insertAdjacentHTML('afterend', `
+      <div id="modal-validacion" style="background:#F1EFE8;border-radius:10px;
+           padding:14px;margin-top:12px;border:0.5px solid #CECBF6">
+        <p style="font-size:12px;font-weight:500;color:#3C3489;margin-bottom:10px">
+          📋 Datos de validación del comprador
+        </p>
+        <div style="display:grid;gap:8px">
+          <div style="display:flex;justify-content:space-between;font-size:13px">
+            <span style="color:#888">Referencia:</span>
+            <strong>${v.referencia_pago || '—'}</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:13px">
+            <span style="color:#888">Titular:</span>
+            <strong>${v.nombre_titular || '—'}</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:13px">
+            <span style="color:#888">Monto declarado:</span>
+            <strong style="${alertaMonto ? 'color:#D85A30' : ''}">
+              ${v.monto_declarado ? formatCOP(v.monto_declarado) : '—'}${alertaMonto ? ' ⚠' : ''}
+            </strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:13px">
+            <span style="color:#888">Monto esperado:</span>
+            <strong style="color:#1D9E75">${formatCOP(v.total_pagado)}</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:13px">
+            <span style="color:#888">Teléfono:</span>
+            <strong>${v.comprador_telefono}</strong>
+          </div>
+        </div>
+        ${alertaMonto
+          ? `<div style="background:#FAECE7;border-radius:6px;padding:8px;margin-top:10px;
+                         font-size:12px;color:#712B13">
+               ⚠ Monto no coincide. Verifica antes de aprobar.
+             </div>`
+          : `<div style="background:#E1F5EE;border-radius:6px;padding:8px;margin-top:10px;
+                         font-size:12px;color:#085041">
+               ✓ Verifica la referencia en tu app ${formatMetodo(v.metodo_pago)}.
+             </div>`
+        }
+      </div>
+    `);
   } catch(err) {
-    console.error('Error cargando comprobante:', err);
+    console.error('Error:', err);
   }
 }
 
 function cerrarModal() {
   document.getElementById('modal').style.display = 'none';
+  document.getElementById('modal-validacion')?.remove();
   ventaModal = null;
 }
 

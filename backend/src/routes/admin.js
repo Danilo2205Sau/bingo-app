@@ -55,6 +55,7 @@ router.get('/ventas-pendientes', auth, async (req, res, next) => {
     const { rows } = await db.query(`
       SELECT v.id, v.cantidad, v.total_pagado, v.metodo_pago,
              v.comprobante_url, v.creado_en, v.estado_pago,
+             v.referencia_pago, v.nombre_titular, v.monto_declarado,
              c.nombre AS comprador_nombre, c.telefono AS comprador_telefono,
              s.nombre AS sorteo_nombre
       FROM ventas v
