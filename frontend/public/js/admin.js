@@ -246,6 +246,39 @@ async function verComprobante(id) {
   document.getElementById('modal-titulo').textContent  = nombre;
   document.getElementById('modal-detalle').textContent = detalle;
 
+    // Ocultar imagen mientras carga
+  const img = document.getElementById('modal-img');
+  img.style.display = 'none';
+  img.src = '';
+
+  try {
+    const token = sessionStorage.getItem('admin_token');
+    const res = await fetch(`${API_URL}/admin/ventas-pendientes`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const ventas = await res.json();
+    const venta = ventas.find(v => v.id === id);
+
+    if (venta && venta.comprobante_url) {
+      img.src = venta.comprobante_url;
+      img.style.display = 'block';
+      img.onerror = () => {
+        img.style.display = 'none';
+        img.insertAdjacentHTML('afterend',
+          '<p style="color:#888;font-size:13px;margin-top:8px">No se pudo cargar la imagen del comprobante.</p>'
+        );
+      };
+    } else {
+      img.insertAdjacentHTML('afterend',
+        '<p style="color:#888;font-size:13px;margin-top:8px">El comprador no subió comprobante.</p>'
+      );
+    }
+  } catch(err) {
+    console.error('Error cargando comprobante:', err);
+  }
+
+  document.getElementById('modal').style.display = 'flex';
+}
   // Intentar cargar imagen del comprobante vía la API de ventas
   try {
     const venta = await Api.getVenta(id);
