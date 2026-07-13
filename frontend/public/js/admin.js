@@ -3,12 +3,10 @@
 // ============================================
 
 let tokenAdmin   = null;
-let ventaModal   = null;   // venta actualmente abierta en el modal
+let ventaModal   = null;
 
-// ── Inicializar ─────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  // Si hay token guardado en sessionStorage, entrar directo
-  const tokenGuardado = sessionStorage.getItem('admin_token');
+  const tokenGuardado  = sessionStorage.getItem('admin_token');
   const nombreGuardado = sessionStorage.getItem('admin_nombre');
   if (tokenGuardado) {
     tokenAdmin = tokenGuardado;
@@ -18,14 +16,11 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function inicializarEventos() {
-
-  // Login
   document.getElementById('btn-login').addEventListener('click', hacerLogin);
   document.getElementById('login-pass').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') hacerLogin();
   });
 
-  // Logout
   document.getElementById('btn-logout').addEventListener('click', () => {
     sessionStorage.clear();
     tokenAdmin = null;
@@ -33,10 +28,8 @@ function inicializarEventos() {
     document.getElementById('pantalla-login').style.display     = 'flex';
   });
 
-  // Recargar datos
   document.getElementById('btn-recargar').addEventListener('click', cargarDatos);
 
-  // Toggle form nuevo sorteo
   document.getElementById('btn-toggle-form').addEventListener('click', () => {
     const form = document.getElementById('form-sorteo');
     form.style.display = form.style.display === 'none' ? 'block' : 'none';
@@ -46,16 +39,13 @@ function inicializarEventos() {
     document.getElementById('form-sorteo').style.display = 'none';
   });
 
-  // Crear sorteo
   document.getElementById('btn-crear-sorteo').addEventListener('click', crearSorteo);
 
-  // Modal cerrar
   document.getElementById('modal-close').addEventListener('click', cerrarModal);
   document.getElementById('modal').addEventListener('click', (e) => {
     if (e.target === document.getElementById('modal')) cerrarModal();
   });
 
-  // Aprobar / rechazar desde modal
   document.getElementById('modal-aprobar').addEventListener('click', () => {
     if (ventaModal) aprobarVenta(ventaModal);
   });
@@ -66,7 +56,6 @@ function inicializarEventos() {
   });
 }
 
-// ── Login ────────────────────────────────────────────────────────
 async function hacerLogin() {
   const email    = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-pass').value;
@@ -99,7 +88,6 @@ function entrarAlPanel(nombre) {
   cargarDatos();
 }
 
-// ── Cargar todos los datos ───────────────────────────────────────
 async function cargarDatos() {
   await Promise.all([cargarMetricas(), cargarPendientes()]);
 }
@@ -112,7 +100,6 @@ async function cargarMetricas() {
     document.getElementById('m-compradores').textContent = data.compradores_unicos;
     document.getElementById('m-pendientes').textContent  = data.pagos_pendientes;
 
-    // Sorteo activo
     try {
       const sorteo = await Api.getSorteoActivo();
       const pct = Math.round((sorteo.cartones_vendidos / sorteo.total_cartones) * 100);
@@ -175,14 +162,12 @@ async function cargarPendientes() {
   }
 }
 
-// ── Acciones de pagos ────────────────────────────────────────────
 async function aprobarVenta(id) {
   if (!confirm('¿Aprobar este pago y enviar el cartón por WhatsApp?')) return;
   try {
     await Api.aprobarVenta(id, tokenAdmin);
     cerrarModal();
-    mostrarToast('✓ Venta aprobada. Cartón enviado por WhatsApp.', 'success');
-    // Quitar fila de la lista
+    mostrarToast('✓ Venta aprobada. Cartón asignado correctamente.', 'success');
     document.getElementById(`pago-${id}`)?.remove();
     if (!document.querySelectorAll('.pago-item').length) {
       document.getElementById('pagos-lista').innerHTML =
@@ -207,14 +192,13 @@ async function rechazarVenta(id, notas) {
   }
 }
 
-// ── Crear sorteo ─────────────────────────────────────────────────
 async function crearSorteo() {
   const datos = {
-    nombre:            document.getElementById('s-nombre').value.trim(),
+    nombre:             document.getElementById('s-nombre').value.trim(),
     premio_descripcion: document.getElementById('s-premio').value.trim(),
-    fecha_sorteo:      document.getElementById('s-fecha').value,
-    precio_boleta:     parseFloat(document.getElementById('s-precio').value),
-    total_cartones:    parseInt(document.getElementById('s-total').value),
+    fecha_sorteo:       document.getElementById('s-fecha').value,
+    precio_boleta:      parseFloat(document.getElementById('s-precio').value),
+    total_cartones:     parseInt(document.getElementById('s-total').value),
   };
 
   if (!datos.nombre || !datos.fecha_sorteo || !datos.precio_boleta || !datos.total_cartones)
@@ -224,7 +208,6 @@ async function crearSorteo() {
     await Api.crearSorteo(datos, tokenAdmin);
     mostrarToast('✓ Sorteo creado exitosamente', 'success');
     document.getElementById('form-sorteo').style.display = 'none';
-    // Limpiar form
     ['s-nombre','s-premio','s-fecha','s-precio','s-total']
       .forEach(id => document.getElementById(id).value = '');
     cargarMetricas();
@@ -233,9 +216,7 @@ async function crearSorteo() {
   }
 }
 
-// ── Modal comprobante ────────────────────────────────────────────
 async function verComprobante(id) {
-  // Buscar en el DOM los datos que ya tenemos
   const fila = document.getElementById(`pago-${id}`);
   if (!fila) return;
 
@@ -246,10 +227,11 @@ async function verComprobante(id) {
   document.getElementById('modal-titulo').textContent  = nombre;
   document.getElementById('modal-detalle').textContent = detalle;
 
-    // Ocultar imagen mientras carga
   const img = document.getElementById('modal-img');
   img.style.display = 'none';
   img.src = '';
+
+  document.getElementById('modal').style.display = 'flex';
 
   try {
     const token = sessionStorage.getItem('admin_token');
@@ -262,45 +244,17 @@ async function verComprobante(id) {
     if (venta && venta.comprobante_url) {
       img.src = venta.comprobante_url;
       img.style.display = 'block';
-      img.onerror = () => {
-        img.style.display = 'none';
-        img.insertAdjacentHTML('afterend',
-          '<p style="color:#888;font-size:13px;margin-top:8px">No se pudo cargar la imagen del comprobante.</p>'
-        );
-      };
-    } else {
-      img.insertAdjacentHTML('afterend',
-        '<p style="color:#888;font-size:13px;margin-top:8px">El comprador no subió comprobante.</p>'
-      );
     }
   } catch(err) {
     console.error('Error cargando comprobante:', err);
   }
-
-  document.getElementById('modal').style.display = 'flex';
 }
-  // Intentar cargar imagen del comprobante vía la API de ventas
-  try {
-    const venta = await Api.getVenta(id);
-    if (venta.comprobante_url) {
-      document.getElementById('modal-img').src     = venta.comprobante_url;
-      document.getElementById('modal-img').style.display = 'block';
-    } else {
-      document.getElementById('modal-img').style.display = 'none';
-    }
-  } catch {
-    document.getElementById('modal-img').style.display = 'none';
-  }
-
-  document.getElementById('modal').style.display = 'flex';
-
 
 function cerrarModal() {
   document.getElementById('modal').style.display = 'none';
   ventaModal = null;
 }
 
-// ── Helpers ──────────────────────────────────────────────────────
 function iniciales(nombre) {
   return nombre.split(' ').slice(0,2).map(p => p[0]).join('').toUpperCase();
 }
