@@ -90,12 +90,15 @@ async function enviarMensajeTexto(telefono, texto, ventaId) {
 }
 
 async function enviarDocumento(telefono, urlDoc, nombreArchivo, caption, ventaId) {
+  // Paso 1: Subir el PDF a WhatsApp Media API
+  const mediaId = await subirMediaWhatsApp(urlDoc, ventaId);
+
   const body = {
     messaging_product: 'whatsapp',
     to: telefono,
     type: 'document',
     document: {
-      link:     convertirUrlCloudinary(urlDoc),
+      id:       mediaId,
       filename: nombreArchivo,
       caption:  caption,
     },
@@ -118,6 +121,38 @@ async function enviarDocumento(telefono, urlDoc, nombreArchivo, caption, ventaId
   return res.json();
 }
 
+async function subirMediaWhatsApp(urlPdf, ventaId) {
+  // Descargar el PDF desde Cloudinary
+  const pdfRes = await fetch(urlPdf);
+  if (!pdfRes.ok) throw new Error(`No se pudo descargar PDF: ${urlPdf}`);
+  
+  const pdfBuffer = await pdfRes.arrayBuffer();
+  const blob = new Blob([pdfBuffer], { type: 'application/pdf' });
+
+  // Subir a WhatsApp Media API
+  const formData = new FormData();
+  formData.append('messaging_product', 'whatsapp');
+  formData.append('type', 'application/pdf');
+  formData.append('file', blob, 'carton.pdf');
+
+  const res = await fetch(`${META_API_URL}/${PHONE_NUMBER_ID}/media`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${ACCESS_TOKEN}`,
+    },
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    await registrarError(ventaId, JSON.stringify(err));
+    throw new Error(`Error subiendo media: ${JSON.stringify(err)}`);
+  }
+
+  const data = await res.json();
+  return data.id;
+}
+
 async function registrarError(ventaId, errorMsg) {
   try {
     await db.query(`
@@ -138,20 +173,6 @@ function formatearNumero(telefono) {
   if (digits.startsWith('57') && digits.length === 12) return digits;
   // Número colombiano de 10 dígitos: agregar 57
   return `57${digits}`;
-}
-
-function convertirUrlCloudinary(url) {
-  if (!url) return url;
-  // Agregar parámetro de descarga directa
-  if (url.includes('res.cloudinary.com')) {
-    // Quitar parámetros existentes y agregar fl_attachment
-    const baseUrl = url.split('?')[0];
-    return baseUrl.replace(
-      '/raw/upload/',
-      '/raw/upload/fl_attachment/'
-    );
-  }
-  return url;
 }
 
 module.exports = { enviarCartonesPorWhatsApp };
