@@ -141,13 +141,15 @@ function formatearNumero(telefono) {
 }
 
 function convertirUrlCloudinary(url) {
-  // Convierte URL raw de Cloudinary a URL descargable directamente
-  // De: https://res.cloudinary.com/xxx/raw/upload/v123/cartones/xxx.pdf
-  // A:  https://res.cloudinary.com/xxx/image/upload/fl_attachment/v123/cartones/xxx.pdf
-  if (url && url.includes('res.cloudinary.com')) {
-    return url
-      .replace('/raw/upload/', '/image/upload/fl_attachment/')
-      .replace('.pdf', '.pdf');
+  if (!url) return url;
+  // Agregar parámetro de descarga directa
+  if (url.includes('res.cloudinary.com')) {
+    // Quitar parámetros existentes y agregar fl_attachment
+    const baseUrl = url.split('?')[0];
+    return baseUrl.replace(
+      '/raw/upload/',
+      '/raw/upload/fl_attachment/'
+    );
   }
   return url;
 }
