@@ -95,7 +95,7 @@ async function enviarDocumento(telefono, urlDoc, nombreArchivo, caption, ventaId
     to: telefono,
     type: 'document',
     document: {
-      link:     urlDoc,
+      link:     convertirUrlCloudinary(urlDoc),
       filename: nombreArchivo,
       caption:  caption,
     },
@@ -138,6 +138,18 @@ function formatearNumero(telefono) {
   if (digits.startsWith('57') && digits.length === 12) return digits;
   // Número colombiano de 10 dígitos: agregar 57
   return `57${digits}`;
+}
+
+function convertirUrlCloudinary(url) {
+  // Convierte URL raw de Cloudinary a URL descargable directamente
+  // De: https://res.cloudinary.com/xxx/raw/upload/v123/cartones/xxx.pdf
+  // A:  https://res.cloudinary.com/xxx/image/upload/fl_attachment/v123/cartones/xxx.pdf
+  if (url && url.includes('res.cloudinary.com')) {
+    return url
+      .replace('/raw/upload/', '/image/upload/fl_attachment/')
+      .replace('.pdf', '.pdf');
+  }
+  return url;
 }
 
 module.exports = { enviarCartonesPorWhatsApp };
