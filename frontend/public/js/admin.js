@@ -250,53 +250,76 @@ async function verComprobante(id) {
     const alertaMonto = v.monto_declarado &&
       Math.abs(parseFloat(v.monto_declarado) - parseFloat(v.total_pagado)) > 100;
 
+    const hayDatosOCR = v.referencia_pago || v.nombre_titular ||
+                        v.monto_declarado || v.banco_origen;
+
+    const estadoOCR = hayDatosOCR
+      ? `<div style="background:#E1F5EE;border-radius:6px;padding:6px 10px;
+                     margin-bottom:10px;font-size:11px;color:#085041">
+           🤖 Datos extraídos automáticamente del comprobante
+         </div>`
+      : `<div style="background:#FAEEDA;border-radius:6px;padding:6px 10px;
+                     margin-bottom:10px;font-size:11px;color:#633806">
+           ⏳ Procesando imagen... Recarga en 30 seg para ver los datos.
+         </div>`;
+
+    const filas = [
+      { label: 'Banco detectado',   valor: v.banco_origen      || '—', icon: '🏦' },
+      { label: 'Referencia',        valor: v.referencia_pago   || '—', icon: '🔢' },
+      { label: 'Titular remitente', valor: v.nombre_titular    || '—', icon: '👤' },
+      { label: 'Monto detectado',   valor: v.monto_declarado
+          ? formatCOP(v.monto_declarado) + (alertaMonto ? ' ⚠' : ' ✓')
+          : '—',
+        icon: '💰',
+        color: alertaMonto ? '#D85A30' : v.monto_declarado ? '#1D9E75' : '',
+      },
+      { label: 'Fecha transacción', valor: v.fecha_transaccion || '—', icon: '📅' },
+      { label: 'Monto esperado',    valor: formatCOP(v.total_pagado), icon: '🎯',
+        color: '#1D9E75' },
+      { label: 'Teléfono',          valor: v.comprador_telefono, icon: '📱' },
+      { label: 'Método de pago',    valor: formatMetodo(v.metodo_pago), icon: '💳' },
+    ];
+
     img.insertAdjacentHTML('afterend', `
-      <div id="modal-validacion" style="background:#F1EFE8;border-radius:10px;
-           padding:14px;margin-top:12px;border:0.5px solid #CECBF6">
-        <p style="font-size:12px;font-weight:500;color:#3C3489;margin-bottom:10px">
-          📋 Datos de validación del comprador
+      <div id="modal-validacion" style="
+        background:#F7F6F2;border-radius:10px;padding:14px;
+        margin-top:12px;border:0.5px solid #CECBF6
+      ">
+        <p style="font-size:13px;font-weight:500;color:#3C3489;margin-bottom:8px">
+          📋 Resumen del pago
         </p>
-        <div style="display:grid;gap:8px">
-          <div style="display:flex;justify-content:space-between;font-size:13px">
-            <span style="color:#888">Referencia:</span>
-            <strong>${v.referencia_pago || '—'}</strong>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:13px">
-            <span style="color:#888">Titular:</span>
-            <strong>${v.nombre_titular || '—'}</strong>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:13px">
-            <span style="color:#888">Monto declarado:</span>
-            <strong style="${alertaMonto ? 'color:#D85A30' : ''}">
-              ${v.monto_declarado ? formatCOP(v.monto_declarado) : '—'}${alertaMonto ? ' ⚠' : ''}
-            </strong>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:13px">
-            <span style="color:#888">Monto esperado:</span>
-            <strong style="color:#1D9E75">${formatCOP(v.total_pagado)}</strong>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:13px">
-            <span style="color:#888">Teléfono:</span>
-            <strong>${v.comprador_telefono}</strong>
-          </div>
+        ${estadoOCR}
+        <div style="display:grid;gap:6px">
+          ${filas.map(f => `
+            <div style="display:flex;justify-content:space-between;
+                        align-items:center;font-size:13px;
+                        padding:6px 0;border-bottom:0.5px solid #E8E6DF">
+              <span style="color:#888">${f.icon} ${f.label}:</span>
+              <strong style="${f.color ? `color:${f.color}` : 'color:#2C2C2A'}">
+                ${f.valor}
+              </strong>
+            </div>
+          `).join('')}
         </div>
-        ${alertaMonto
-          ? `<div style="background:#FAECE7;border-radius:6px;padding:8px;margin-top:10px;
-                         font-size:12px;color:#712B13">
-               ⚠ Monto no coincide. Verifica antes de aprobar.
-             </div>`
-          : `<div style="background:#E1F5EE;border-radius:6px;padding:8px;margin-top:10px;
-                         font-size:12px;color:#085041">
-               ✓ Verifica la referencia en tu app ${formatMetodo(v.metodo_pago)}.
-             </div>`
-        }
+        ${alertaMonto ? `
+          <div style="background:#FAECE7;border-radius:6px;padding:8px;
+                      margin-top:10px;font-size:12px;color:#712B13">
+            ⚠ El monto detectado no coincide. Verifica antes de aprobar.
+          </div>
+        ` : hayDatosOCR ? `
+          <div style="background:#E1F5EE;border-radius:6px;padding:8px;
+                      margin-top:10px;font-size:12px;color:#085041">
+            ✓ Verifica la referencia <strong>${v.referencia_pago || '—'}</strong>
+            en tu app ${formatMetodo(v.metodo_pago)} y aprueba si es correcto.
+          </div>
+        ` : ''}
       </div>
     `);
+
   } catch(err) {
     console.error('Error:', err);
   }
 }
-
 function cerrarModal() {
   document.getElementById('modal').style.display = 'none';
   document.getElementById('modal-validacion')?.remove();

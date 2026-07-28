@@ -1,6 +1,7 @@
 const router   = require('express').Router();
 const db       = require('../config/db');
 const { subirArchivo } = require('../services/cloudinary');
+const { extraerDatosComprobante } = require('../services/ocrService');
 const upload   = require('../middleware/upload');
 
 // POST /api/ventas — crear una venta (comprador llena el formulario)
@@ -45,22 +46,39 @@ router.post('/', upload.single('comprobante'), async (req, res, next) => {
     // Subir comprobante a Cloudinary si viene archivo
     let comprobante_url = null;
     if (req.file) {
-      comprobante_url = req.file.path; // multer-storage-cloudinary pone la URL aquí
+      comprobante_url = req.file.path;
     }
 
-   const { rows: venta } = await db.query(`
+    const { rows: venta } = await db.query(`
       INSERT INTO ventas
-        (comprador_id, sorteo_id, cantidad, total_pagado, metodo_pago,
-         comprobante_url, referencia_pago, nombre_titular, monto_declarado)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        (comprador_id, sorteo_id, cantidad, total_pagado, metodo_pago, comprobante_url)
+      VALUES ($1,$2,$3,$4,$5,$6)
       RETURNING id, estado_pago, creado_en
-    `, [
-      comprador_id, sorteo_id, cant, total, metodo_pago,
-      comprobante_url,
-      referencia_pago?.trim() || null,
-      nombre_titular?.trim() || null,
-      parseFloat(monto_declarado) || null,
-    ]);
+    `, [comprador_id, sorteo_id, cant, total, metodo_pago, comprobante_url]);
+
+    const ventaId = venta[0].id;
+
+    // OCR asíncrono — no bloquea la respuesta al comprador
+    if (comprobante_url) {
+      extraerDatosComprobante(comprobante_url).then(datos => {
+        return db.query(`
+          UPDATE ventas SET
+            referencia_pago   = $1,
+            nombre_titular    = $2,
+            monto_declarado   = $3,
+            banco_origen      = $4,
+            fecha_transaccion = $5
+          WHERE id = $6
+        `, [
+          datos.referencia_pago,
+          datos.nombre_titular,
+          datos.monto_declarado,
+          datos.banco_origen,
+          datos.fecha_transaccion,
+          ventaId,
+        ]);
+      }).catch(e => console.error('OCR async error:', e));
+    }
 
     res.status(201).json({
       message: 'Compra registrada. El administrador revisará tu pago pronto.',
