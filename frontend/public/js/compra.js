@@ -135,18 +135,11 @@ function actualizarInfoPago() {
 async function procesarCompra() {
   const nombre         = document.getElementById('nombre').value.trim();
   const telefono       = document.getElementById('telefono').value.trim();
-  const referencia     = document.getElementById('referencia').value.trim();
-  const nombreTitular  = document.getElementById('nombre-titular').value.trim();
-  const montoDeclarado = document.getElementById('monto-declarado').value.trim();
 
   if (!nombre)
     return mostrarError('Ingresa tu nombre completo');
   if (!telefono || telefono.length < 10)
     return mostrarError('Ingresa un número de WhatsApp válido (10 dígitos)');
-  if (!referencia)
-    return mostrarError('Ingresa el número de referencia de tu transferencia');
-  if (!nombreTitular)
-    return mostrarError('Ingresa el nombre del titular que realizó el pago');
   if (!archivoActual)
     return mostrarError('Debes subir el comprobante de pago');
   if (!sorteoActivo)    return mostrarError('No hay sorteo activo');
@@ -162,9 +155,6 @@ async function procesarCompra() {
     formData.append('cantidad',        cantidadActual);
     formData.append('metodo_pago',     metodoPago);
     formData.append('sorteo_id',       sorteoActivo.id);
-    formData.append('referencia_pago', referencia);
-    formData.append('nombre_titular',  nombreTitular);
-    formData.append('monto_declarado', montoDeclarado || '0');
     formData.append('comprobante',     archivoActual);
 
     const resultado = await Api.crearVenta(formData);
