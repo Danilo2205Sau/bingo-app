@@ -10,7 +10,7 @@ Los compradores pagan, suben comprobante y reciben su cartón PDF por WhatsApp.
 - Node.js 18+
 - PostgreSQL 14+
 - Cuenta en [Cloudinary](https://cloudinary.com) (gratis)
-- Cuenta en [Twilio](https://twilio.com) con WhatsApp habilitado
+- Cuenta en meta con WhatsApp habilitado
 - Cuenta en [Railway](https://railway.app) o [Render](https://render.com) para despliegue
 
 ---
@@ -88,12 +88,12 @@ git subtree push --prefix frontend/public origin gh-pages
 
 ---
 
-## 📱 Configurar WhatsApp con Twilio
+## 📱 Configurar WhatsApp con meta
 
-1. Crear cuenta en [twilio.com](https://twilio.com)
+1. Crear cuenta en 
 2. Activar el **Sandbox de WhatsApp** (gratis para pruebas)
-3. Copiar `TWILIO_ACCOUNT_SID` y `TWILIO_AUTH_TOKEN` al `.env`
-4. Para producción: solicitar número de WhatsApp Business en Twilio
+3. Copiar `` y `AUTH_TOKEN` al `.env`
+4. Para producción: solicitar número de WhatsApp Business 
 
 ---
 
