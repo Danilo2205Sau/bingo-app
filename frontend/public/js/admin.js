@@ -54,6 +54,10 @@ function inicializarEventos() {
     const notas = prompt('Motivo del rechazo (opcional):') || '';
     if (ventaModal) rechazarVenta(ventaModal, notas);
   });
+
+  document.getElementById('btn-generar-cartones').addEventListener('click', generarCartones);
+  document.getElementById('cartones-sorteo-select').addEventListener('change', actualizarProgresoCartones);
+  document.getElementById('cartones-pdf-input').addEventListener('change', subirCartonPDF);
 }
 
 async function hacerLogin() {
@@ -88,8 +92,163 @@ function entrarAlPanel(nombre) {
   cargarDatos();
 }
 
+let todosLosSorteos = [];
+
 async function cargarDatos() {
-  await Promise.all([cargarMetricas(), cargarPendientes()]);
+  await Promise.all([cargarMetricas(), cargarPendientes(), cargarSorteos()]);
+}
+
+// ── Gestión de sorteos ──────────────────────────────────────────
+async function cargarSorteos() {
+  const lista = document.getElementById('sorteos-lista');
+  try {
+    todosLosSorteos = await Api.getSorteos(tokenAdmin);
+
+    if (!todosLosSorteos.length) {
+      lista.innerHTML = '<div class="empty-pagos">Aún no has creado ningún sorteo</div>';
+    } else {
+      lista.innerHTML = todosLosSorteos.map(s => `
+        <div class="sorteo-item">
+          <div class="sorteo-item-top">
+            <strong>${s.nombre}</strong>
+            <span class="badge ${badgeClaseEstado(s.estado)}">${s.estado}</span>
+          </div>
+          <div style="font-size:12px;color:#888;margin-bottom:8px">
+            ${s.cartones_generados}/${s.total_cartones} cartones generados · ${formatCOP(s.precio_boleta)} c/u
+          </div>
+          <div class="sorteo-item-acciones">
+            ${s.estado !== 'activo' ? `<button class="activar" onclick="cambiarEstado('${s.id}','activo')">Activar</button>` : ''}
+            ${s.estado === 'activo' ? `<button class="cerrar" onclick="cambiarEstado('${s.id}','cerrado')">Cerrar ventas</button>` : ''}
+            ${s.estado === 'cerrado' ? `<button onclick="cambiarEstado('${s.id}','finalizado')">Marcar finalizado</button>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    poblarSelectCartones();
+  } catch (err) {
+    lista.innerHTML = `<div class="empty-pagos" style="color:#D85A30">Error cargando sorteos: ${err.message}</div>`;
+  }
+}
+
+function badgeClaseEstado(estado) {
+  return {
+    activo: 'badge-approved',
+    borrador: 'badge-borrador',
+    cerrado: 'badge-cerrado',
+    finalizado: 'badge-finalizado',
+  }[estado] || 'badge-borrador';
+}
+
+async function cambiarEstado(id, estado) {
+  const confirmaciones = {
+    activo: '¿Activar este sorteo? Se mostrará a los compradores en la página pública.',
+    cerrado: '¿Cerrar las ventas de este sorteo? Ya no se podrán comprar más boletas.',
+    finalizado: '¿Marcar este sorteo como finalizado?',
+  };
+  if (!confirm(confirmaciones[estado] || '¿Confirmar cambio de estado?')) return;
+
+  try {
+    await Api.cambiarEstadoSorteo(id, estado, tokenAdmin);
+    mostrarToast('✓ Estado actualizado', 'success');
+    cargarDatos();
+  } catch (err) {
+    mostrarToast(err.message, 'error');
+  }
+}
+
+// ── Cartones ─────────────────────────────────────────────────────
+function poblarSelectCartones() {
+  const select = document.getElementById('cartones-sorteo-select');
+  const seleccionPrevia = select.value;
+
+  if (!todosLosSorteos.length) {
+    select.innerHTML = '<option value="">No hay sorteos creados aún</option>';
+    document.getElementById('cartones-progreso').textContent = '';
+    return;
+  }
+
+  select.innerHTML = todosLosSorteos.map(s =>
+    `<option value="${s.id}">${s.nombre} (${s.estado})</option>`
+  ).join('');
+
+  if (seleccionPrevia && todosLosSorteos.some(s => s.id === seleccionPrevia)) {
+    select.value = seleccionPrevia;
+  }
+
+  actualizarProgresoCartones();
+}
+
+function actualizarProgresoCartones() {
+  const select = document.getElementById('cartones-sorteo-select');
+  const sorteo = todosLosSorteos.find(s => s.id === select.value);
+  const progreso = document.getElementById('cartones-progreso');
+  if (!sorteo) { progreso.textContent = ''; return; }
+
+  const restantes = sorteo.total_cartones - sorteo.cartones_generados;
+  progreso.textContent = restantes > 0
+    ? `${sorteo.cartones_generados}/${sorteo.total_cartones} generados · puedes generar ${restantes} más`
+    : `${sorteo.cartones_generados}/${sorteo.total_cartones} generados · ya no puedes generar más para este sorteo`;
+}
+
+async function generarCartones() {
+  const sorteoId  = document.getElementById('cartones-sorteo-select').value;
+  const cantidad  = parseInt(document.getElementById('cartones-cantidad').value);
+  const mensajeEl = document.getElementById('cartones-mensaje');
+
+  if (!sorteoId) return mostrarToast('Primero crea o selecciona un sorteo', 'error');
+  if (!cantidad || cantidad < 1) return mostrarToast('Ingresa una cantidad válida', 'error');
+
+  const btn = document.getElementById('btn-generar-cartones');
+  btn.disabled = true;
+  btn.textContent = 'Generando...';
+  mensajeEl.textContent = '';
+
+  try {
+    const data = await Api.generarCartones(sorteoId, cantidad, tokenAdmin);
+    mensajeEl.style.color = '#085041';
+    mensajeEl.textContent = `✓ ${data.message}`;
+    document.getElementById('cartones-cantidad').value = '';
+    await cargarSorteos();
+  } catch (err) {
+    mensajeEl.style.color = '#712B13';
+    mensajeEl.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⚡ Generar';
+  }
+}
+
+async function subirCartonPDF(e) {
+  const archivo  = e.target.files[0];
+  const sorteoId = document.getElementById('cartones-sorteo-select').value;
+  const mensajeEl = document.getElementById('cartones-mensaje');
+  if (!archivo) return;
+
+  if (!sorteoId) {
+    mostrarToast('Primero selecciona un sorteo', 'error');
+    e.target.value = '';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('sorteo_id', sorteoId);
+  formData.append('pdf', archivo);
+
+  mensajeEl.style.color = '#5F5E5A';
+  mensajeEl.textContent = 'Subiendo PDF...';
+
+  try {
+    const data = await Api.subirCarton(formData, tokenAdmin);
+    mensajeEl.style.color = '#085041';
+    mensajeEl.textContent = `✓ Cartón subido: ${data.codigo_unico}`;
+    await cargarSorteos();
+  } catch (err) {
+    mensajeEl.style.color = '#712B13';
+    mensajeEl.textContent = err.message;
+  } finally {
+    e.target.value = '';
+  }
 }
 
 async function cargarMetricas() {

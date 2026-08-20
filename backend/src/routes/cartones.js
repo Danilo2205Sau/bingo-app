@@ -12,6 +12,30 @@ router.post('/generar', auth, async (req, res, next) => {
       return res.status(400).json({ error: 'sorteo_id y cantidad requeridos' });
 
     const cant = parseInt(cantidad);
+    if (!Number.isInteger(cant) || cant < 1)
+      return res.status(400).json({ error: 'La cantidad debe ser un número mayor a 0' });
+
+    // No permitir pasarse del total_cartones definido para el sorteo
+    const { rows: sorteoRows } = await db.query(
+      'SELECT total_cartones FROM sorteos WHERE id = $1', [sorteo_id]
+    );
+    if (!sorteoRows.length)
+      return res.status(404).json({ error: 'Sorteo no encontrado' });
+
+    const { rows: countRows } = await db.query(
+      'SELECT COUNT(*)::int AS total FROM cartones WHERE sorteo_id = $1', [sorteo_id]
+    );
+    const yaGenerados = countRows[0].total;
+    const disponiblesParaGenerar = sorteoRows[0].total_cartones - yaGenerados;
+
+    if (cant > disponiblesParaGenerar) {
+      return res.status(409).json({
+        error: disponiblesParaGenerar <= 0
+          ? 'Ya se generaron todos los cartones definidos para este sorteo'
+          : `Solo puedes generar ${disponiblesParaGenerar} cartón(es) más (${yaGenerados}/${sorteoRows[0].total_cartones} ya generados)`
+      });
+    }
+
     const generados = [];
 
         for (let i = 0; i < cant; i++) {

@@ -22,9 +22,17 @@ router.get('/activo', async (req, res, next) => {
 // GET /api/sorteos — todos (solo admin)
 router.get('/', auth, async (req, res, next) => {
   try {
-    const { rows } = await db.query(
-      'SELECT * FROM sorteos ORDER BY creado_en DESC'
-    );
+    const { rows } = await db.query(`
+      SELECT s.*,
+             COALESCE(c.total_generados, 0) AS cartones_generados
+      FROM sorteos s
+      LEFT JOIN (
+        SELECT sorteo_id, COUNT(*) AS total_generados
+        FROM cartones
+        GROUP BY sorteo_id
+      ) c ON c.sorteo_id = s.id
+      ORDER BY s.creado_en DESC
+    `);
     res.json(rows);
   } catch (err) { next(err); }
 });

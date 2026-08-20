@@ -88,7 +88,27 @@
     #form-sorteo { background:#fff; border-radius:12px; border:0.5px solid rgba(0,0,0,.1); padding:16px; margin-bottom:16px }
     #form-sorteo { display:none }
 
-    .empty-pagos { text-align:center; padding:32px; color:#888; font-size:14px }
+   .empty-pagos { text-align:center; padding:32px; color:#888; font-size:14px }
+
+    /* Lista de sorteos */
+    .sorteo-item { padding:12px 14px; border-bottom:0.5px solid rgba(0,0,0,.06) }
+    .sorteo-item:last-child { border-bottom:none }
+    .sorteo-item-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px }
+    .sorteo-item-top strong { font-size:14px }
+    .badge-borrador  { background:#EEEDFE; color:#3C3489 }
+    .badge-cerrado   { background:#FAEEDA; color:#633806 }
+    .badge-finalizado{ background:#EEEDEA; color:#5F5E5A }
+    .sorteo-item-acciones { display:flex; gap:6px; flex-wrap:wrap }
+    .sorteo-item-acciones button {
+      font-size:11px; padding:5px 10px; border-radius:6px; cursor:pointer;
+      border:0.5px solid rgba(0,0,0,.12); background:#fff; color:#444
+    }
+    .sorteo-item-acciones button.activar  { background:#1D9E75; color:#fff; border-color:#1D9E75 }
+    .sorteo-item-acciones button.cerrar   { background:#fff; color:#D85A30; border-color:#D85A30 }
+    #cartones-sorteo-select {
+      width:100%; border:0.5px solid rgba(0,0,0,.12); border-radius:8px;
+      padding:10px 12px; font-size:14px; background:#fff; color:#2C2C2A
+    }
   </style>
 </head>
 <body>
@@ -196,6 +216,35 @@
         <button class="btn-action success" id="btn-crear-sorteo">Crear sorteo</button>
         <button class="btn-action" id="btn-cancelar-form">Cancelar</button>
       </div>
+    </div>
+
+       <!-- Todos los sorteos -->
+    <div class="section-title">Todos los sorteos</div>
+    <div class="pagos-lista" id="sorteos-lista" style="margin-bottom:16px">
+      <div class="empty-pagos">Cargando sorteos...</div>
+    </div>
+
+    <!-- Cartones -->
+    <div class="section-title">Cartones</div>
+    <div class="sorteo-activo" id="cartones-panel" style="margin-bottom:16px">
+      <div class="form-group">
+        <label>Sorteo</label>
+        <select id="cartones-sorteo-select"></select>
+      </div>
+      <div id="cartones-progreso" style="font-size:13px;color:#888;margin-bottom:10px"></div>
+
+      <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:12px">
+        <input type="number" id="cartones-cantidad" placeholder="Cantidad a generar" min="1" />
+        <button class="btn-action success" id="btn-generar-cartones">⚡ Generar</button>
+      </div>
+
+      <label class="upload-zone" for="cartones-pdf-input" style="display:block;margin-bottom:8px">
+        <div class="upload-icon">↑</div>
+        <p>Subir PDF de cartón propio</p>
+        <div class="upload-hint">Se asigna al sorteo seleccionado arriba</div>
+      </label>
+      <input type="file" id="cartones-pdf-input" accept="application/pdf" style="display:none" />
+      <div id="cartones-mensaje" style="font-size:13px;margin-top:6px"></div>
     </div>
 
     <!-- Pagos por revisar -->

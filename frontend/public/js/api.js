@@ -104,6 +104,56 @@ const Api = {
     if (!res.ok) throw new Error(data.error || 'Error al crear sorteo');
     return data;
   },
+
+  // ── Gestión de sorteos (admin) ───────────────────────────────
+  async getSorteos(token) {
+    const res = await fetch(`${API_URL}/sorteos`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al listar sorteos');
+    return data;
+  },
+
+  async cambiarEstadoSorteo(id, estado, token) {
+    const res = await fetch(`${API_URL}/sorteos/${id}/estado`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ estado }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al cambiar estado');
+    return data;
+  },
+
+  // ── Cartones (admin) ─────────────────────────────────────────
+  async generarCartones(sorteo_id, cantidad, token) {
+    const res = await fetch(`${API_URL}/cartones/generar`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sorteo_id, cantidad }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al generar cartones');
+    return data;
+  },
+
+  async subirCarton(formData, token) {
+    const res = await fetch(`${API_URL}/cartones/subir`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData, // FormData con el PDF incluido
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al subir cartón');
+    return data;
+  },
 };
 
 // Helper formato moneda colombiana
