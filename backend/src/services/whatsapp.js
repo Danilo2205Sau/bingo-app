@@ -21,6 +21,7 @@ async function enviarCartonesPorWhatsApp(ventaId) {
     JOIN cartones c       ON c.id = vc.carton_id
     WHERE v.id = $1
   `, [ventaId]);
+  
 
   if (!rows.length) throw new Error(`Venta ${ventaId} sin cartones`);
 
@@ -44,18 +45,18 @@ async function enviarCartonesPorWhatsApp(ventaId) {
     ventaId
   );
 
-  // 2. Enviar cada cartón como documento PDF
-  for (const carton of rows) {
-    await enviarDocumento(
-      numeroFormateado,
-      carton.pdf_url,
-      `Carton-${carton.codigo_unico}.pdf`,
-      `🎴 Cartón #${carton.codigo_unico} — Guárdalo, es tu boleta oficial.`,
-      ventaId
-    );
-    // Pausa entre mensajes para evitar rate limit
-    await new Promise(r => setTimeout(r, 1000));
-  }
+   // 2. Enviar la hoja de cartones (un solo PDF con todos los cartones de esta venta)
+  const pdfUrl = rows[0].pdf_url;
+  if (!pdfUrl) throw new Error(`Venta ${ventaId} sin pdf_url asignado aún`);
+
+  const codigosTexto = rows.map(r => r.codigo_unico).join(', ');
+  await enviarDocumento(
+    numeroFormateado,
+    pdfUrl,
+    `Cartones-Venta-${ventaId.slice(0, 8)}.pdf`,
+    `🎴 Tus ${rows.length} cartón(es): ${codigosTexto} — Guárdalos, son tu boleta oficial.`,
+    ventaId
+  );
 
   // Registrar notificación exitosa
   await db.query(`

@@ -2,7 +2,6 @@ const router  = require('express').Router();
 const db      = require('../config/db');
 const auth    = require('../middleware/auth');
 const upload  = require('../middleware/upload');
-const { generarCartonPDF } = require('../services/pdfGenerator');
 const { v4: uuidv4 } = require('uuid');
 
 // POST /api/cartones/generar — generar N cartones automáticos para un sorteo
@@ -15,16 +14,16 @@ router.post('/generar', auth, async (req, res, next) => {
     const cant = parseInt(cantidad);
     const generados = [];
 
-    for (let i = 0; i < cant; i++) {
+        for (let i = 0; i < cant; i++) {
       const codigo = generarCodigo();
       const numeros = generarMatrizBingo();
-      const { pdfUrl } = await generarCartonPDF({ codigo, numeros, sorteo_id });
 
+      // pdf_url se completa al aprobar la venta (hoja de cartones compartida)
       const { rows } = await db.query(`
         INSERT INTO cartones (sorteo_id, codigo_unico, numeros, pdf_url, tipo)
-        VALUES ($1,$2,$3,$4,'generado')
+        VALUES ($1,$2,$3,NULL,'generado')
         RETURNING id, codigo_unico
-      `, [sorteo_id, codigo, JSON.stringify(numeros), pdfUrl]);
+      `, [sorteo_id, codigo, JSON.stringify(numeros)]);
 
       generados.push(rows[0]);
     }

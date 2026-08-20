@@ -92,7 +92,7 @@ router.patch('/ventas/:id/aprobar', auth, async (req, res, next) => {
 
     // 2. Asignar cartones disponibles del sorteo
     const cartones = await client.query(`
-      SELECT id FROM cartones
+      SELECT id, codigo_unico, numeros FROM cartones
       WHERE sorteo_id = $1 AND vendido = false
       LIMIT $2
       FOR UPDATE SKIP LOCKED
@@ -114,11 +114,40 @@ router.patch('/ventas/:id/aprobar', auth, async (req, res, next) => {
       );
     }
 
-    await client.query('COMMIT');
+        await client.query('COMMIT');
 
-    // 4. Disparar envío de WhatsApp (async, no bloquea la respuesta)
-    const { enviarCartonesPorWhatsApp } = require('../services/whatsapp');
-    enviarCartonesPorWhatsApp(venta.id).catch(console.error);
+    // 4. Generar la hoja de cartones (PDF único con todos los cartones de esta venta)
+    //    y disparar el envío de WhatsApp — todo async, no bloquea la respuesta al admin
+    (async () => {
+      try {
+        const { generarHojaCartonesPDF } = require('../services/pdfGenerator');
+        const { rows: sorteoRows } = await db.query(
+          'SELECT nombre, fecha_sorteo FROM sorteos WHERE id = $1', [venta.sorteo_id]
+        );
+        const sorteoInfo = sorteoRows[0] || {};
+
+        const { pdfUrl } = await generarHojaCartonesPDF({
+          cartones: cartones.rows.map(c => c),
+          sorteoNombre: sorteoInfo.nombre,
+          fechaSorteoTexto: sorteoInfo.fecha_sorteo
+            ? new Date(sorteoInfo.fecha_sorteo).toLocaleDateString('es-CO', { dateStyle: 'long' })
+            : '',
+          ventaId: venta.id,
+          whatsappContacto: process.env.WHATSAPP_CONTACTO_PUBLICO || '',
+        });
+
+        const idsCartones = cartones.rows.map(c => c.id);
+        await db.query(
+          'UPDATE cartones SET pdf_url = $1 WHERE id = ANY($2::uuid[])',
+          [pdfUrl, idsCartones]
+        );
+
+        const { enviarCartonesPorWhatsApp } = require('../services/whatsapp');
+        await enviarCartonesPorWhatsApp(venta.id);
+      } catch (err) {
+        console.error('Error generando/enviando hoja de cartones:', err);
+      }
+    })();
 
     res.json({ message: 'Venta aprobada y cartones asignados', venta_id: venta.id });
   } catch (err) {

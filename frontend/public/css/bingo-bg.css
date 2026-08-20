@@ -1,0 +1,137 @@
+/* ============================================
+   BINGO BG — Fondo animado festivo del hero
+   Bolas de bingo cayendo + destellos dorados,
+   sin depender de video/gif externo.
+   ============================================ */
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(ellipse at top, #7A1414 0%, #3B0A0A 55%, #1A0505 100%);
+  padding-top: 40px;
+  padding-bottom: 28px;
+}
+
+/* Capa de textura/viñeta dorada sutil */
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(255,200,60,0.18) 0%, transparent 35%),
+    radial-gradient(circle at 85% 15%, rgba(255,200,60,0.14) 0%, transparent 30%),
+    radial-gradient(circle at 50% 100%, rgba(255,120,40,0.12) 0%, transparent 45%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+#bingo-bg-canvas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Contenido del hero por encima del fondo animado */
+.hero > *:not(#bingo-bg-canvas) {
+  position: relative;
+  z-index: 2;
+}
+
+/* ── Bolas de bingo ─────────────────────────────────────────── */
+.bingo-ball {
+  position: absolute;
+  top: -60px;
+  width: var(--size, 34px);
+  height: var(--size, 34px);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: -apple-system, 'Segoe UI', sans-serif;
+  font-weight: 700;
+  font-size: calc(var(--size, 34px) * 0.38);
+  color: #fff;
+  box-shadow:
+    inset -4px -4px 6px rgba(0,0,0,0.25),
+    inset 3px 3px 5px rgba(255,255,255,0.35),
+    0 3px 8px rgba(0,0,0,0.35);
+  opacity: 0;
+  animation: bingo-fall linear infinite, bingo-spin linear infinite;
+}
+
+.bingo-ball.c1 { background: radial-gradient(circle at 35% 30%, #FF6F61, #C22B1F); }
+.bingo-ball.c2 { background: radial-gradient(circle at 35% 30%, #FFD558, #E08E00); }
+.bingo-ball.c3 { background: radial-gradient(circle at 35% 30%, #7FE0A6, #1D9E75); }
+.bingo-ball.c4 { background: radial-gradient(circle at 35% 30%, #8FA9FF, #3C55C4); }
+.bingo-ball.c5 { background: radial-gradient(circle at 35% 30%, #C98FFF, #7A2FBF); }
+
+@keyframes bingo-fall {
+  0%   { transform: translateY(-10%); opacity: 0; }
+  8%   { opacity: 0.9; }
+  92%  { opacity: 0.85; }
+  100% { transform: translateY(115vh); opacity: 0; }
+}
+
+@keyframes bingo-spin {
+  from { rotate: 0deg; }
+  to   { rotate: 360deg; }
+}
+
+/* ── Destellos dorados ──────────────────────────────────────── */
+.bingo-spark {
+  position: absolute;
+  width: var(--size, 6px);
+  height: var(--size, 6px);
+  background: #FFD558;
+  border-radius: 50%;
+  box-shadow: 0 0 8px 2px rgba(255, 213, 88, 0.8);
+  opacity: 0;
+  animation: bingo-twinkle ease-in-out infinite;
+}
+
+@keyframes bingo-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0.4); }
+  50%      { opacity: 1; transform: scale(1); }
+}
+
+/* ── Retema de textos del hero sobre fondo rojo/dorado ─────────── */
+.hero-badge {
+  background: linear-gradient(135deg, #FFD558, #E08E00);
+  color: #3B0A0A;
+  font-weight: 700;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+}
+
+.hero h1 {
+  font-size: 26px;
+  font-weight: 800;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.4);
+  letter-spacing: -0.3px;
+}
+
+.premio {
+  color: #FFD558;
+  text-shadow: 0 2px 14px rgba(255, 213, 88, 0.45);
+  font-size: 40px;
+}
+
+.fecha {
+  color: #FFDCA8;
+}
+
+.boletas-bar {
+  background: rgba(0,0,0,0.28);
+  backdrop-filter: blur(2px);
+  color: #FFDCA8;
+}
+
+.boletas-bar span:last-child {
+  color: #FFD558;
+}
+
+/* Respeta preferencia de menos movimiento */
+@media (prefers-reduced-motion: reduce) {
+  .bingo-ball, .bingo-spark { animation: none !important; display: none; }
+}
