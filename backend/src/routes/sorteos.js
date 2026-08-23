@@ -60,6 +60,7 @@ router.post('/', auth, async (req, res, next) => {
 });
 
 // PATCH /api/sorteos/:id/estado — cambiar estado (solo admin)
+// PATCH /:id/estado — cambiar estado (solo admin)
 router.patch('/:id/estado', auth, async (req, res, next) => {
   try {
     const { estado } = req.body;
@@ -70,6 +71,33 @@ router.patch('/:id/estado', auth, async (req, res, next) => {
     const { rows } = await db.query(
       'UPDATE sorteos SET estado=$1, actualizado_en=NOW() WHERE id=$2 RETURNING *',
       [estado, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Sorteo no encontrado' });
+    res.json(rows[0]);
+  } catch (err) { next(err); }
+});
+
+// PATCH /:id/total-cartones — aumentar el límite de cartones (solo admin, nunca lo baja del ya generado)
+router.patch('/:id/total-cartones', auth, async (req, res, next) => {
+  try {
+    const nuevoTotal = parseInt(req.body.total_cartones);
+    if (!Number.isInteger(nuevoTotal) || nuevoTotal < 1)
+      return res.status(400).json({ error: 'El nuevo total debe ser un número mayor a 0' });
+
+    const { rows: countRows } = await db.query(
+      'SELECT COUNT(*)::int AS total FROM cartones WHERE sorteo_id = $1', [req.params.id]
+    );
+    const yaGenerados = countRows[0].total;
+
+    if (nuevoTotal < yaGenerados) {
+      return res.status(409).json({
+        error: `No puedes bajar el límite a ${nuevoTotal}: ya hay ${yaGenerados} cartones generados. El mínimo posible es ${yaGenerados}.`
+      });
+    }
+
+    const { rows } = await db.query(
+      'UPDATE sorteos SET total_cartones = $1, actualizado_en = NOW() WHERE id = $2 RETURNING *',
+      [nuevoTotal, req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Sorteo no encontrado' });
     res.json(rows[0]);

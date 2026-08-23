@@ -120,6 +120,7 @@ async function cargarSorteos() {
             ${s.estado !== 'activo' ? `<button class="activar" onclick="cambiarEstado('${s.id}','activo')">Activar</button>` : ''}
             ${s.estado === 'activo' ? `<button class="cerrar" onclick="cambiarEstado('${s.id}','cerrado')">Cerrar ventas</button>` : ''}
             ${s.estado === 'cerrado' ? `<button onclick="cambiarEstado('${s.id}','finalizado')">Marcar finalizado</button>` : ''}
+            <button onclick="aumentarLimiteCartones('${s.id}', ${s.total_cartones})">✏ Aumentar límite</button>
           </div>
         </div>
       `).join('');
@@ -151,6 +152,25 @@ async function cambiarEstado(id, estado) {
   try {
     await Api.cambiarEstadoSorteo(id, estado, tokenAdmin);
     mostrarToast('✓ Estado actualizado', 'success');
+    cargarDatos();
+  } catch (err) {
+    mostrarToast(err.message, 'error');
+  }
+}
+
+async function aumentarLimiteCartones(id, totalActual) {
+  const input = prompt(`Límite actual: ${totalActual} cartones.\n¿Cuál es el nuevo total? (debe ser mayor a ${totalActual})`, totalActual);
+  if (input === null) return; // canceló el prompt
+
+  const nuevoTotal = parseInt(input);
+  if (!Number.isInteger(nuevoTotal) || nuevoTotal < 1)
+    return mostrarToast('Ingresa un número válido', 'error');
+  if (nuevoTotal <= totalActual)
+    return mostrarToast(`El nuevo total debe ser mayor a ${totalActual}`, 'error');
+
+  try {
+    await Api.actualizarTotalCartones(id, nuevoTotal, tokenAdmin);
+    mostrarToast(`✓ Límite aumentado a ${nuevoTotal} cartones`, 'success');
     cargarDatos();
   } catch (err) {
     mostrarToast(err.message, 'error');

@@ -115,7 +115,7 @@ const Api = {
     return data;
   },
 
-  async cambiarEstadoSorteo(id, estado, token) {
+   async cambiarEstadoSorteo(id, estado, token) {
     const res = await fetch(`${API_URL}/sorteos/${id}/estado`, {
       method: 'PATCH',
       headers: {
@@ -126,6 +126,20 @@ const Api = {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Error al cambiar estado');
+    return data;
+  },
+
+  async actualizarTotalCartones(id, nuevoTotal, token) {
+    const res = await fetch(`${API_URL}/sorteos/${id}/total-cartones`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ total_cartones: nuevoTotal }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al actualizar el límite');
     return data;
   },
 
