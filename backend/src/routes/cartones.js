@@ -3,86 +3,151 @@ const db      = require('../config/db');
 const auth    = require('../middleware/auth');
 const upload  = require('../middleware/upload');
 const { v4: uuidv4 } = require('uuid');
+const { generarBoleta, generarCodigo } = require('../services/ticketGenerator');
 
-// POST /api/cartones/generar — generar N cartones automáticos para un sorteo
+// POST /api/cartones/generar — generar N boletas para una modalidad (bingo o rifa)
 router.post('/generar', auth, async (req, res, next) => {
   try {
-    const { sorteo_id, cantidad } = req.body;
-    if (!sorteo_id || !cantidad)
-      return res.status(400).json({ error: 'sorteo_id y cantidad requeridos' });
+    const { modalidad_id, cantidad } = req.body;
+    if (!modalidad_id || !cantidad)
+      return res.status(400).json({ error: 'modalidad_id y cantidad requeridos' });
 
     const cant = parseInt(cantidad);
     if (!Number.isInteger(cant) || cant < 1)
       return res.status(400).json({ error: 'La cantidad debe ser un número mayor a 0' });
 
-    // No permitir pasarse del total_cartones definido para el sorteo
-    const { rows: sorteoRows } = await db.query(
-      'SELECT total_cartones FROM sorteos WHERE id = $1', [sorteo_id]
+    const { rows: modRows } = await db.query(
+      'SELECT * FROM modalidades WHERE id = $1', [modalidad_id]
     );
-    if (!sorteoRows.length)
-      return res.status(404).json({ error: 'Sorteo no encontrado' });
+    if (!modRows.length)
+      return res.status(404).json({ error: 'Modalidad no encontrada' });
+    const modalidad = modRows[0];
 
     const { rows: countRows } = await db.query(
-      'SELECT COUNT(*)::int AS total FROM cartones WHERE sorteo_id = $1', [sorteo_id]
+      'SELECT COUNT(*)::int AS total FROM cartones WHERE modalidad_id = $1', [modalidad_id]
     );
     const yaGenerados = countRows[0].total;
-    const disponiblesParaGenerar = sorteoRows[0].total_cartones - yaGenerados;
+    const disponiblesParaGenerar = modalidad.total_boletas - yaGenerados;
 
     if (cant > disponiblesParaGenerar) {
       return res.status(409).json({
         error: disponiblesParaGenerar <= 0
-          ? 'Ya se generaron todos los cartones definidos para este sorteo'
-          : `Solo puedes generar ${disponiblesParaGenerar} cartón(es) más (${yaGenerados}/${sorteoRows[0].total_cartones} ya generados)`
+          ? 'Ya se generaron todas las boletas definidas para esta modalidad'
+          : `Solo puedes generar ${disponiblesParaGenerar} boleta(s) más (${yaGenerados}/${modalidad.total_boletas} ya generadas)`
       });
     }
 
     const generados = [];
 
-        for (let i = 0; i < cant; i++) {
+    for (let i = 0; i < cant; i++) {
       const codigo = generarCodigo();
-      const numeros = generarMatrizBingo();
+      const { numeros } = generarBoleta(modalidad, yaGenerados + i);
 
-      // pdf_url se completa al aprobar la venta (hoja de cartones compartida)
       const { rows } = await db.query(`
-        INSERT INTO cartones (sorteo_id, codigo_unico, numeros, pdf_url, tipo)
-        VALUES ($1,$2,$3,NULL,'generado')
+        INSERT INTO cartones (sorteo_id, modalidad_id, tipo_boleta, codigo_unico, numeros, pdf_url, tipo)
+        VALUES ($1,$2,$3,$4,$5,NULL,'generado')
         RETURNING id, codigo_unico
-      `, [sorteo_id, codigo, JSON.stringify(numeros)]);
+      `, [modalidad.sorteo_id, modalidad_id, modalidad.tipo_boleta, codigo, JSON.stringify(numeros)]);
 
       generados.push(rows[0]);
     }
 
-    res.status(201).json({ message: `${cant} cartones generados`, cartones: generados });
+    res.status(201).json({ message: `${cant} boleta(s) generada(s)`, cartones: generados });
   } catch (err) { next(err); }
 });
 
 // POST /api/cartones/subir — subir un PDF ya hecho
 router.post('/subir', auth, upload.single('pdf'), async (req, res, next) => {
   try {
-    const { sorteo_id } = req.body;
+    const { sorteo_id, modalidad_id } = req.body;
     if (!sorteo_id || !req.file)
       return res.status(400).json({ error: 'sorteo_id y archivo PDF requeridos' });
 
     const codigo = generarCodigo();
     const { rows } = await db.query(`
-      INSERT INTO cartones (sorteo_id, codigo_unico, pdf_url, tipo)
-      VALUES ($1,$2,$3,'subido')
+      INSERT INTO cartones (sorteo_id, modalidad_id, codigo_unico, pdf_url, tipo)
+      VALUES ($1,$2,$3,$4,'subido')
       RETURNING id, codigo_unico
-    `, [sorteo_id, codigo, req.file.path]);
+    `, [sorteo_id, modalidad_id || null, codigo, req.file.path]);
 
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }
+});
+
+// GET /api/cartones/disponibles/:modalidadId — números disponibles para elegir
+// (excluye vendidos y los que están reservados activamente por otra persona)
+router.get('/disponibles/:modalidadId', async (req, res, next) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT id, codigo_unico, numeros
+      FROM cartones
+      WHERE modalidad_id = $1
+        AND vendido = false
+        AND (reservado_hasta IS NULL OR reservado_hasta < NOW())
+      ORDER BY numeros::text ASC
+    `, [req.params.modalidadId]);
+    res.json(rows);
+  } catch (err) { next(err); }
+});
+
+// POST /api/cartones/reservar — reservar boletas específicas por 20 minutos
+// body: { modalidad_id, carton_ids: ["uuid1","uuid2"] }
+router.post('/reservar', async (req, res, next) => {
+  const client = await db.pool.connect();
+  try {
+    const { modalidad_id, carton_ids } = req.body;
+    if (!modalidad_id || !Array.isArray(carton_ids) || !carton_ids.length)
+      return res.status(400).json({ error: 'modalidad_id y carton_ids (array) requeridos' });
+
+    await client.query('BEGIN');
+
+    const { rows: disponibles } = await client.query(`
+      SELECT id, codigo_unico, numeros FROM cartones
+      WHERE id = ANY($1::uuid[]) AND modalidad_id = $2
+        AND vendido = false
+        AND (reservado_hasta IS NULL OR reservado_hasta < NOW())
+      FOR UPDATE SKIP LOCKED
+    `, [carton_ids, modalidad_id]);
+
+    if (disponibles.length < carton_ids.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: 'Uno o más números que elegiste ya no están disponibles (alguien más los tomó). Elige otros.',
+        disponibles: disponibles.map(d => d.id),
+      });
+    }
+
+    const expiraEn = new Date(Date.now() + 20 * 60 * 1000); // 20 minutos
+    await client.query(`
+      UPDATE cartones SET reservado_hasta = $1
+      WHERE id = ANY($2::uuid[])
+    `, [expiraEn, carton_ids]);
+
+    await client.query('COMMIT');
+    res.json({
+      message: 'Números reservados por 20 minutos. Completa tu compra antes de que expire.',
+      expira_en: expiraEn,
+      cartones: disponibles,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
 });
 
 // GET /api/cartones/:codigo — obtener info de un cartón por código
 router.get('/:codigo', async (req, res, next) => {
   try {
     const { rows } = await db.query(`
-      SELECT c.id, c.codigo_unico, c.numeros, c.pdf_url, c.vendido,
+      SELECT c.id, c.codigo_unico, c.numeros, c.pdf_url, c.vendido, c.tipo_boleta,
              s.nombre AS sorteo_nombre, s.fecha_sorteo, s.premio_descripcion,
+             m.nombre AS modalidad_nombre, m.metodo_resultado, m.fuente_resultado,
              comp.nombre AS comprador_nombre
       FROM cartones c
       JOIN sorteos s ON s.id = c.sorteo_id
+      LEFT JOIN modalidades m ON m.id = c.modalidad_id
       LEFT JOIN venta_cartones vc ON vc.carton_id = c.id
       LEFT JOIN ventas v ON v.id = vc.venta_id
       LEFT JOIN compradores comp ON comp.id = v.comprador_id
@@ -93,48 +158,5 @@ router.get('/:codigo', async (req, res, next) => {
     res.json(rows[0]);
   } catch (err) { next(err); }
 });
-
-// ── Helpers ────────────────────────────────────────────────────
-
-function generarCodigo() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let codigo = '';
-  for (let i = 0; i < 8; i++) {
-    codigo += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return codigo;
-}
-
-function generarMatrizBingo() {
-  // Bingo clásico 5x5: B(1-15) I(16-30) N(31-45) G(46-60) O(61-75)
-  // Centro libre (null)
-  const rangos = [
-    [1,15], [16,30], [31,45], [46,60], [61,75]
-  ];
-  const matriz = [];
-  for (let col = 0; col < 5; col++) {
-    const [min, max] = rangos[col];
-    const nums = shuffle(range(min, max)).slice(0, 5);
-    for (let row = 0; row < 5; row++) {
-      if (!matriz[row]) matriz[row] = [];
-      matriz[row][col] = (col === 2 && row === 2) ? null : nums[row];
-    }
-  }
-  return matriz;
-}
-
-function range(min, max) {
-  const arr = [];
-  for (let i = min; i <= max; i++) arr.push(i);
-  return arr;
-}
-
-function shuffle(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
 
 module.exports = router;

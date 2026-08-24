@@ -90,17 +90,32 @@ router.patch('/ventas/:id/aprobar', auth, async (req, res, next) => {
 
     const venta = rows[0];
 
-    // 2. Asignar cartones disponibles del sorteo
-    const cartones = await client.query(`
-      SELECT id, codigo_unico, numeros FROM cartones
-      WHERE sorteo_id = $1 AND vendido = false
-      LIMIT $2
-      FOR UPDATE SKIP LOCKED
-    `, [venta.sorteo_id, venta.cantidad]);
+    // 2. Asignar boletas: primero las que el comprador eligió y reservó (si las hay),
+    //    completando con asignación aleatoria del resto disponible en la modalidad
+    const yaElegidos = await client.query(`
+      SELECT id, codigo_unico, numeros, tipo_boleta FROM cartones
+      WHERE reservado_venta_id = $1 AND vendido = false
+      FOR UPDATE
+    `, [venta.id]);
+
+    const faltanPorAsignar = venta.cantidad - yaElegidos.rows.length;
+    let asignadosAlAzar = { rows: [] };
+
+    if (faltanPorAsignar > 0) {
+      asignadosAlAzar = await client.query(`
+        SELECT id, codigo_unico, numeros, tipo_boleta FROM cartones
+        WHERE modalidad_id = $1 AND vendido = false
+          AND (reservado_hasta IS NULL OR reservado_hasta < NOW())
+        LIMIT $2
+        FOR UPDATE SKIP LOCKED
+      `, [venta.modalidad_id, faltanPorAsignar]);
+    }
+
+    const cartones = { rows: [...yaElegidos.rows, ...asignadosAlAzar.rows] };
 
     if (cartones.rows.length < venta.cantidad) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'No hay suficientes cartones disponibles' });
+      return res.status(409).json({ error: 'No hay suficientes boletas disponibles en esta modalidad' });
     }
 
     // 3. Marcar cartones como vendidos e insertar en venta_cartones
@@ -114,27 +129,50 @@ router.patch('/ventas/:id/aprobar', auth, async (req, res, next) => {
       );
     }
 
-        await client.query('COMMIT');
+    await client.query('COMMIT');
 
-    // 4. Generar la hoja de cartones (PDF único con todos los cartones de esta venta)
-    //    y disparar el envío de WhatsApp — todo async, no bloquea la respuesta al admin
+    // 4. Generar el PDF de las boletas (con imagen de premiación si el evento tiene una,
+    //    o la hoja clásica de respaldo si no) y disparar el envío de WhatsApp
     (async () => {
       try {
-        const { generarHojaCartonesPDF } = require('../services/pdfGenerator');
+        const { generarHojaCartonesPDF, generarBoletasConImagenPremio } = require('../services/pdfGenerator');
         const { rows: sorteoRows } = await db.query(
-          'SELECT nombre, fecha_sorteo FROM sorteos WHERE id = $1', [venta.sorteo_id]
+          'SELECT nombre, fecha_sorteo, imagen_premio_url FROM sorteos WHERE id = $1', [venta.sorteo_id]
         );
-        const sorteoInfo = sorteoRows[0] || {};
+        const { rows: modRows } = await db.query(
+          'SELECT nombre, tipo_boleta, precio_boleta, metodo_resultado, fuente_resultado FROM modalidades WHERE id = $1',
+          [venta.modalidad_id]
+        );
+        const sorteoInfo    = sorteoRows[0] || {};
+        const modalidadInfo = modRows[0] || {};
+        const fechaSorteoTexto = sorteoInfo.fecha_sorteo
+          ? new Date(sorteoInfo.fecha_sorteo).toLocaleDateString('es-CO', { dateStyle: 'long' })
+          : '';
+        const whatsappContacto = process.env.WHATSAPP_CONTACTO_PUBLICO || '';
 
-        const { pdfUrl } = await generarHojaCartonesPDF({
-          cartones: cartones.rows.map(c => c),
-          sorteoNombre: sorteoInfo.nombre,
-          fechaSorteoTexto: sorteoInfo.fecha_sorteo
-            ? new Date(sorteoInfo.fecha_sorteo).toLocaleDateString('es-CO', { dateStyle: 'long' })
-            : '',
-          ventaId: venta.id,
-          whatsappContacto: process.env.WHATSAPP_CONTACTO_PUBLICO || '',
-        });
+        let pdfUrl;
+        if (sorteoInfo.imagen_premio_url) {
+          ({ pdfUrl } = await generarBoletasConImagenPremio({
+            cartones: cartones.rows.map(c => c),
+            imagenPremioUrl: sorteoInfo.imagen_premio_url,
+            sorteoNombre: sorteoInfo.nombre,
+            fechaSorteoTexto,
+            precioBoleta: modalidadInfo.precio_boleta,
+            whatsappContacto,
+            ventaId: venta.id,
+          }));
+        } else {
+          ({ pdfUrl } = await generarHojaCartonesPDF({
+            cartones: cartones.rows.map(c => c),
+            tipoBoleta: modalidadInfo.tipo_boleta || 'bingo',
+            modalidadNombre: modalidadInfo.nombre,
+            fuenteResultado: modalidadInfo.fuente_resultado,
+            sorteoNombre: sorteoInfo.nombre,
+            fechaSorteoTexto,
+            ventaId: venta.id,
+            whatsappContacto,
+          }));
+        }
 
         const idsCartones = cartones.rows.map(c => c.id);
         await db.query(
@@ -166,12 +204,20 @@ router.patch('/ventas/:id/rechazar', auth, async (req, res, next) => {
       UPDATE ventas SET estado_pago = 'rechazado', notas_admin = $1
       WHERE id = $2
     `, [notas || '', req.params.id]);
+
+    // Liberar de inmediato cualquier número que el comprador hubiera elegido/reservado
+    await db.query(`
+      UPDATE cartones SET reservado_venta_id = NULL, reservado_hasta = NULL
+      WHERE reservado_venta_id = $1
+    `, [req.params.id]);
+
     res.json({ message: 'Venta rechazada' });
   } catch (err) { next(err); }
 });
 
 // GET /api/admin/eventos/:sorteoId/boletas — todas las boletas de un evento,
 // con el comprador (si ya fue vendida) y filtros por número o teléfono
+// query params opcionales: ?numero=047  ?telefono=3114470472  ?modalidad_id=...
 router.get('/eventos/:sorteoId/boletas', auth, async (req, res, next) => {
   try {
     const { numero, telefono, modalidad_id } = req.query;

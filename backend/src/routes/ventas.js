@@ -7,7 +7,7 @@ const upload   = require('../middleware/upload');
 router.post('/', upload.single('comprobante'), async (req, res, next) => {
   try {
     const { nombre, telefono, cantidad, metodo_pago, sorteo_id, modalidad_id,
-        referencia_pago, nombre_titular, monto_declarado } = req.body;
+        referencia_pago, nombre_titular, monto_declarado, carton_ids } = req.body;
 
     if (!nombre || !telefono || !cantidad || !metodo_pago || !sorteo_id || !modalidad_id)
       return res.status(400).json({ error: 'Faltan campos requeridos' });
@@ -63,6 +63,29 @@ router.post('/', upload.single('comprobante'), async (req, res, next) => {
     `, [comprador_id, sorteo_id, modalidad_id, cant, total, metodo_pago, comprobante_url]);
 
     const ventaId = venta[0].id;
+
+    // Si el comprador eligió números específicos (ya reservados), vincularlos a esta venta
+    // y extender la reserva 48h mientras el admin revisa el pago (en vez de expirar en 20 min)
+    let idsElegidos = [];
+    if (carton_ids) {
+      try { idsElegidos = typeof carton_ids === 'string' ? JSON.parse(carton_ids) : carton_ids; }
+      catch { idsElegidos = []; }
+    }
+    if (Array.isArray(idsElegidos) && idsElegidos.length) {
+      const { rowCount } = await db.query(`
+        UPDATE cartones SET
+          reservado_venta_id = $1,
+          reservado_hasta    = NOW() + INTERVAL '48 hours'
+        WHERE id = ANY($2::uuid[])
+          AND modalidad_id = $3
+          AND vendido = false
+          AND (reservado_hasta IS NULL OR reservado_hasta > NOW())
+      `, [ventaId, idsElegidos, modalidad_id]);
+
+      if (rowCount < idsElegidos.length) {
+        console.error(`Venta ${ventaId}: solo se vincularon ${rowCount}/${idsElegidos.length} cartones elegidos (reserva pudo expirar)`);
+      }
+    }
 
     // OCR asíncrono — no bloquea la respuesta al comprador
     if (comprobante_url) {
