@@ -7,11 +7,34 @@ const API_URL = 'https://bingo-app-production-9452.up.railway.app/api'; // Cambi
 
 const Api = {
 
-  // ── Sorteos ──────────────────────────────────────────────────
+  // ── Sorteos / Eventos (público) ─────────────────────────────
   async getSorteoActivo() {
     const res = await fetch(`${API_URL}/sorteos/activo`);
     if (!res.ok) throw new Error('No hay sorteo activo');
     return res.json();
+  },
+
+  async getSorteosActivos() {
+    const res = await fetch(`${API_URL}/sorteos/activos`);
+    if (!res.ok) throw new Error('Error al cargar sorteos activos');
+    return res.json();
+  },
+
+  async getNumerosDisponibles(modalidadId) {
+    const res = await fetch(`${API_URL}/cartones/disponibles/${modalidadId}`);
+    if (!res.ok) throw new Error('Error al cargar números disponibles');
+    return res.json();
+  },
+
+  async reservarNumeros(modalidad_id, carton_ids) {
+    const res = await fetch(`${API_URL}/cartones/reservar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ modalidad_id, carton_ids }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al reservar números');
+    return data;
   },
 
   // ── Ventas (comprador) ───────────────────────────────────────
@@ -91,21 +114,19 @@ const Api = {
     return data;
   },
 
-  async crearSorteo(datos, token) {
-    const res = await fetch(`${API_URL}/sorteos`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(datos),
+  async getBoletasEvento(sorteoId, filtros, token) {
+    const params = new URLSearchParams();
+    if (filtros?.numero)   params.set('numero', filtros.numero);
+    if (filtros?.telefono) params.set('telefono', filtros.telefono);
+    const res = await fetch(`${API_URL}/admin/eventos/${sorteoId}/boletas?${params}`, {
+      headers: { Authorization: `Bearer ${token}` },
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Error al crear sorteo');
+    if (!res.ok) throw new Error(data.error || 'Error al buscar boletas');
     return data;
   },
 
-  // ── Gestión de sorteos (admin) ───────────────────────────────
+  // ── Gestión de eventos (admin) — CRUD completo ────────────────
   async getSorteos(token) {
     const res = await fetch(`${API_URL}/sorteos`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -115,43 +136,97 @@ const Api = {
     return data;
   },
 
-   async cambiarEstadoSorteo(id, estado, token) {
-    const res = await fetch(`${API_URL}/sorteos/${id}/estado`, {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ estado }),
+  async getSorteo(id, token) {
+    const res = await fetch(`${API_URL}/sorteos/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Error al cambiar estado');
+    if (!res.ok) throw new Error(data.error || 'Error al cargar el evento');
     return data;
   },
 
-  async actualizarTotalCartones(id, nuevoTotal, token) {
-    const res = await fetch(`${API_URL}/sorteos/${id}/total-cartones`, {
+  // datos = { nombre, descripcion, fecha_sorteo, premio_descripcion, descripcion_premio,
+  //           tipo_boleta, modalidad_nombre, precio_boleta, total_boletas,
+  //           permite_elegir_numero, config, metodo_resultado, fuente_resultado }
+  // imagenFile = File opcional (imagen de premiación)
+  async crearEvento(datos, imagenFile, token) {
+    const formData = new FormData();
+    Object.entries(datos).forEach(([k, v]) => {
+      if (v === undefined || v === null || v === '') return;
+      formData.append(k, typeof v === 'object' ? JSON.stringify(v) : v);
+    });
+    if (imagenFile) formData.append('imagen_premio', imagenFile);
+
+    const res = await fetch(`${API_URL}/sorteos`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al crear el evento');
+    return data;
+  },
+
+  async editarEvento(id, datos, imagenFile, token) {
+    const formData = new FormData();
+    Object.entries(datos).forEach(([k, v]) => {
+      if (v === undefined || v === null || v === '') return;
+      formData.append(k, v);
+    });
+    if (imagenFile) formData.append('imagen_premio', imagenFile);
+
+    const res = await fetch(`${API_URL}/sorteos/${id}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al editar el evento');
+    return data;
+  },
+
+  async cambiarEstadoSorteo(id, estado, token) {
+    return Api.editarEvento(id, { estado }, null, token);
+  },
+
+  async aumentarBoletas(modalidadId, nuevoTotal, token) {
+    const res = await fetch(`${API_URL}/sorteos/modalidad/${modalidadId}/aumentar`, {
       method: 'PATCH',
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ total_cartones: nuevoTotal }),
+      body: JSON.stringify({ nuevo_total: nuevoTotal }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Error al actualizar el límite');
+    if (!res.ok) throw new Error(data.error || 'Error al aumentar boletas');
+    return data;
+  },
+
+  // Borrado con doble confirmación: primera llamada sin confirmar,
+  // si el backend responde 409 pidiendo confirmación, se repite con confirmar=true
+  async eliminarEvento(id, confirmar, token) {
+    const res = await fetch(`${API_URL}/sorteos/${id}${confirmar ? '?confirmar=true' : ''}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (res.status === 409 && data.requiereConfirmacion) {
+      return { requiereConfirmacion: true, mensaje: data.mensaje };
+    }
+    if (!res.ok) throw new Error(data.error || 'Error al eliminar el evento');
     return data;
   },
 
   // ── Cartones (admin) ─────────────────────────────────────────
-  async generarCartones(sorteo_id, cantidad, token) {
+  async generarCartones(modalidad_id, cantidad, token) {
     const res = await fetch(`${API_URL}/cartones/generar`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ sorteo_id, cantidad }),
+      body: JSON.stringify({ modalidad_id, cantidad }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Error al generar cartones');
