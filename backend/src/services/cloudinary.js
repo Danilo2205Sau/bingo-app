@@ -46,4 +46,13 @@ const storagePDFs = new CloudinaryStorage({
   },
 });
 
-module.exports = { subirBuffer, storageComprobantes, storagePDFs, cloudinary };
+const storagePremios = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'bingo/premios',
+    resource_type: 'image',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+  },
+});
+
+module.exports = { subirBuffer, storageComprobantes, storagePDFs, storagePremios, cloudinary };

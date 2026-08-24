@@ -170,4 +170,44 @@ router.patch('/ventas/:id/rechazar', auth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/admin/eventos/:sorteoId/boletas — todas las boletas de un evento,
+// con el comprador (si ya fue vendida) y filtros por número o teléfono
+router.get('/eventos/:sorteoId/boletas', auth, async (req, res, next) => {
+  try {
+    const { numero, telefono, modalidad_id } = req.query;
+    const condiciones = ['c.sorteo_id = $1'];
+    const valores = [req.params.sorteoId];
+
+    if (modalidad_id) {
+      valores.push(modalidad_id);
+      condiciones.push(`c.modalidad_id = $${valores.length}`);
+    }
+    if (numero) {
+      valores.push(`%${numero}%`);
+      condiciones.push(`(c.codigo_unico ILIKE $${valores.length} OR c.numeros::text ILIKE $${valores.length})`);
+    }
+    if (telefono) {
+      valores.push(`%${telefono.replace(/\D/g, '')}%`);
+      condiciones.push(`comp.telefono ILIKE $${valores.length}`);
+    }
+
+    const { rows } = await db.query(`
+      SELECT
+        c.id, c.codigo_unico, c.numeros, c.tipo_boleta, c.vendido, c.pdf_url,
+        m.nombre AS modalidad_nombre,
+        comp.nombre AS comprador_nombre, comp.telefono AS comprador_telefono,
+        v.id AS venta_id, v.estado_pago, v.creado_en AS comprado_en
+      FROM cartones c
+      LEFT JOIN modalidades m ON m.id = c.modalidad_id
+      LEFT JOIN venta_cartones vc ON vc.carton_id = c.id
+      LEFT JOIN ventas v ON v.id = vc.venta_id
+      LEFT JOIN compradores comp ON comp.id = v.comprador_id
+      WHERE ${condiciones.join(' AND ')}
+      ORDER BY c.codigo_unico ASC
+    `, valores);
+
+    res.json({ total: rows.length, boletas: rows });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
