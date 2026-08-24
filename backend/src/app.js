@@ -26,11 +26,12 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // ── Rutas ─────────────────────────────────────────────────────
-app.use('/api/sorteos',  require('./routes/sorteos'));
-app.use('/api/ventas',   require('./routes/ventas'));
-app.use('/api/cartones', require('./routes/cartones'));
-app.use('/api/admin',    require('./routes/admin'));
-app.use('/api/consulta', require('./routes/consulta'));
+app.use('/api/sorteos',     require('./routes/sorteos'));
+app.use('/api/modalidades', require('./routes/modalidades'));
+app.use('/api/ventas',      require('./routes/ventas'));
+app.use('/api/cartones',    require('./routes/cartones'));
+app.use('/api/admin',       require('./routes/admin'));
+app.use('/api/consulta',    require('./routes/consulta'));
 
 // ── Health check ──────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {

@@ -1,37 +1,43 @@
 const router   = require('express').Router();
 const db       = require('../config/db');
-const { subirArchivo } = require('../services/cloudinary');
 const { extraerDatosComprobante } = require('../services/ocrService');
 const upload   = require('../middleware/upload');
 
 // POST /api/ventas — crear una venta (comprador llena el formulario)
 router.post('/', upload.single('comprobante'), async (req, res, next) => {
   try {
-    const { nombre, telefono, cantidad, metodo_pago, sorteo_id,
+    const { nombre, telefono, cantidad, metodo_pago, sorteo_id, modalidad_id,
         referencia_pago, nombre_titular, monto_declarado } = req.body;
 
-    if (!nombre || !telefono || !cantidad || !metodo_pago || !sorteo_id)
+    if (!nombre || !telefono || !cantidad || !metodo_pago || !sorteo_id || !modalidad_id)
       return res.status(400).json({ error: 'Faltan campos requeridos' });
 
-    // Verificar sorteo activo y disponibilidad
-    const { rows: sorteos } = await db.query(`
-      SELECT id, precio_boleta, total_cartones, cartones_vendidos
-      FROM sorteos WHERE id = $1 AND estado = 'activo'
-    `, [sorteo_id]);
-
+    // Verificar sorteo activo
+    const { rows: sorteos } = await db.query(
+      `SELECT id FROM sorteos WHERE id = $1 AND estado = 'activo'`, [sorteo_id]
+    );
     if (!sorteos.length)
       return res.status(404).json({ error: 'Sorteo no disponible' });
 
-    const sorteo = sorteos[0];
+    // Verificar modalidad y disponibilidad
+    const { rows: modalidades } = await db.query(
+      `SELECT id, precio_boleta, total_boletas, boletas_vendidas
+       FROM modalidades WHERE id = $1 AND sorteo_id = $2 AND activo = true`,
+      [modalidad_id, sorteo_id]
+    );
+    if (!modalidades.length)
+      return res.status(404).json({ error: 'Modalidad no disponible' });
+
+    const modalidad = modalidades[0];
     const cant = parseInt(cantidad);
-    const disponibles = sorteo.total_cartones - sorteo.cartones_vendidos;
+    const disponibles = modalidad.total_boletas - modalidad.boletas_vendidas;
 
     if (cant > disponibles)
       return res.status(409).json({
-        error: `Solo quedan ${disponibles} boletas disponibles`
+        error: `Solo quedan ${disponibles} boleta(s) disponibles en esta modalidad`
       });
 
-    const total = parseFloat(sorteo.precio_boleta) * cant;
+    const total = parseFloat(modalidad.precio_boleta) * cant;
 
     // Upsert comprador (si el teléfono ya existe, reutilizamos)
     const { rows: comp } = await db.query(`
@@ -51,10 +57,10 @@ router.post('/', upload.single('comprobante'), async (req, res, next) => {
 
     const { rows: venta } = await db.query(`
       INSERT INTO ventas
-        (comprador_id, sorteo_id, cantidad, total_pagado, metodo_pago, comprobante_url)
-      VALUES ($1,$2,$3,$4,$5,$6)
+        (comprador_id, sorteo_id, modalidad_id, cantidad, total_pagado, metodo_pago, comprobante_url)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
       RETURNING id, estado_pago, creado_en
-    `, [comprador_id, sorteo_id, cant, total, metodo_pago, comprobante_url]);
+    `, [comprador_id, sorteo_id, modalidad_id, cant, total, metodo_pago, comprobante_url]);
 
     const ventaId = venta[0].id;
 
@@ -96,10 +102,12 @@ router.get('/:id', async (req, res, next) => {
       SELECT v.id, v.cantidad, v.total_pagado, v.estado_pago,
              v.metodo_pago, v.creado_en,
              c.nombre AS comprador_nombre,
-             s.nombre AS sorteo_nombre, s.fecha_sorteo
+             s.nombre AS sorteo_nombre, s.fecha_sorteo,
+             m.nombre AS modalidad_nombre, m.tipo_boleta
       FROM ventas v
       JOIN compradores c ON c.id = v.comprador_id
       JOIN sorteos s     ON s.id = v.sorteo_id
+      LEFT JOIN modalidades m ON m.id = v.modalidad_id
       WHERE v.id = $1
     `, [req.params.id]);
 
