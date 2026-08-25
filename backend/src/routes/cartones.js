@@ -29,12 +29,12 @@ router.post('/generar', auth, async (req, res, next) => {
     const yaGenerados = countRows[0].total;
     const disponiblesParaGenerar = modalidad.total_boletas - yaGenerados;
 
+    // Si se pide más de lo que queda en el tope actual, el tope se amplía
+    // automáticamente (en vez de bloquear la generación con un error)
     if (cant > disponiblesParaGenerar) {
-      return res.status(409).json({
-        error: disponiblesParaGenerar <= 0
-          ? 'Ya se generaron todas las boletas definidas para esta modalidad'
-          : `Solo puedes generar ${disponiblesParaGenerar} boleta(s) más (${yaGenerados}/${modalidad.total_boletas} ya generadas)`
-      });
+      const nuevoTotal = yaGenerados + cant;
+      await db.query('UPDATE modalidades SET total_boletas = $1 WHERE id = $2', [nuevoTotal, modalidad_id]);
+      modalidad.total_boletas = nuevoTotal;
     }
 
     const generados = [];

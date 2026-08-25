@@ -135,6 +135,7 @@ router.patch('/ventas/:id/aprobar', auth, async (req, res, next) => {
     //    o la hoja clásica de respaldo si no) y disparar el envío de WhatsApp
     (async () => {
       try {
+        console.log(`[Venta ${venta.id}] Iniciando generación de PDF y envío por WhatsApp...`);
         const { generarHojaCartonesPDF, generarBoletasConImagenPremio } = require('../services/pdfGenerator');
         const { rows: sorteoRows } = await db.query(
           'SELECT nombre, fecha_sorteo, imagen_premio_url FROM sorteos WHERE id = $1', [venta.sorteo_id]
@@ -152,6 +153,7 @@ router.patch('/ventas/:id/aprobar', auth, async (req, res, next) => {
 
         let pdfUrl;
         if (sorteoInfo.imagen_premio_url) {
+          console.log(`[Venta ${venta.id}] Generando boleta con imagen de premiación...`);
           ({ pdfUrl } = await generarBoletasConImagenPremio({
             cartones: cartones.rows.map(c => c),
             imagenPremioUrl: sorteoInfo.imagen_premio_url,
@@ -162,6 +164,7 @@ router.patch('/ventas/:id/aprobar', auth, async (req, res, next) => {
             ventaId: venta.id,
           }));
         } else {
+          console.log(`[Venta ${venta.id}] Generando hoja clásica de cartones...`);
           ({ pdfUrl } = await generarHojaCartonesPDF({
             cartones: cartones.rows.map(c => c),
             tipoBoleta: modalidadInfo.tipo_boleta || 'bingo',
@@ -173,6 +176,7 @@ router.patch('/ventas/:id/aprobar', auth, async (req, res, next) => {
             whatsappContacto,
           }));
         }
+        console.log(`[Venta ${venta.id}] PDF generado: ${pdfUrl}`);
 
         const idsCartones = cartones.rows.map(c => c.id);
         await db.query(
@@ -180,10 +184,12 @@ router.patch('/ventas/:id/aprobar', auth, async (req, res, next) => {
           [pdfUrl, idsCartones]
         );
 
+        console.log(`[Venta ${venta.id}] Enviando por WhatsApp...`);
         const { enviarCartonesPorWhatsApp } = require('../services/whatsapp');
         await enviarCartonesPorWhatsApp(venta.id);
+        console.log(`[Venta ${venta.id}] ✓ WhatsApp enviado correctamente`);
       } catch (err) {
-        console.error('Error generando/enviando hoja de cartones:', err);
+        console.error(`[Venta ${venta.id}] ✗ ERROR generando/enviando:`, err.message, err.stack);
       }
     })();
 

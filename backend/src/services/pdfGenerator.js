@@ -285,7 +285,7 @@ function dibujarBoletaConImagen(doc, { carton, imagenBuffer, sorteoNombre, fecha
 
   // Panel izquierdo — la imagen de premiación (o un respaldo si no hay imagen)
   if (imagenBuffer) {
-    doc.image(imagenBuffer, 0, 0, { width: imgW, height: pageH, cover: [imgW, pageH], align: 'center', valign: 'center' });
+      doc.image(imagenBuffer, 0, 0, { cover: [imgW, pageH], align: 'center', valign: 'center' });
   } else {
     doc.rect(0, 0, imgW, pageH).fill('#7A1414');
     doc.fillColor('#FFD558').fontSize(26).font('Helvetica-Bold')

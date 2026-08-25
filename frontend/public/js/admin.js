@@ -81,6 +81,7 @@ function inicializarEventos() {
   });
   document.getElementById('btn-guardar-edicion').addEventListener('click', guardarEdicionEvento);
   document.getElementById('btn-aumentar-boletas').addEventListener('click', aumentarBoletasDesdeModal);
+  document.getElementById('btn-guardar-elegir').addEventListener('click', guardarPermiteElegir);
 
   // Consultar boletas
   document.getElementById('btn-buscar-boletas').addEventListener('click', buscarBoletas);
@@ -230,6 +231,8 @@ function abrirModalEditar(id) {
   document.getElementById('e-nuevo-total').dataset.modalidadId = mod.id || '';
   document.getElementById('e-nuevo-total').dataset.actual = mod.total_boletas || 0;
   document.getElementById('e-aumentar-msg').textContent = '';
+  document.getElementById('e-permite-elegir').checked = !!mod.permite_elegir_numero;
+  document.getElementById('e-permite-elegir').dataset.modalidadId = mod.id || '';
 
   document.getElementById('modal-editar').style.display = 'flex';
 }
@@ -252,6 +255,26 @@ async function guardarEdicionEvento() {
     await Api.editarEvento(id, datos, imagen, tokenAdmin);
     mostrarToast('✓ Evento actualizado', 'success');
     cerrarModalEditar();
+    cargarDatos();
+  } catch (err) {
+    mostrarToast(err.message, 'error');
+  }
+}
+
+async function guardarPermiteElegir() {
+  const checkbox = document.getElementById('e-permite-elegir');
+  const modalidadId = checkbox.dataset.modalidadId;
+  if (!modalidadId) return mostrarToast('Este evento no tiene modalidad asociada', 'error');
+
+  try {
+    const res = await fetch(`${API_URL}/modalidades/${modalidadId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ permite_elegir_numero: checkbox.checked }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al guardar');
+    mostrarToast('✓ Preferencia guardada', 'success');
     cargarDatos();
   } catch (err) {
     mostrarToast(err.message, 'error');

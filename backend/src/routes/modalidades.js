@@ -66,17 +66,18 @@ router.get('/:sorteoId/todas', auth, async (req, res, next) => {
 // PATCH /api/modalidades/:id — editar (solo admin)
 router.patch('/:id', auth, async (req, res, next) => {
   try {
-    const { nombre, precio_boleta, total_boletas, activo, fuente_resultado } = req.body;
+    const { nombre, precio_boleta, total_boletas, activo, fuente_resultado, permite_elegir_numero } = req.body;
     const { rows } = await db.query(`
       UPDATE modalidades SET
-        nombre           = COALESCE($1, nombre),
-        precio_boleta    = COALESCE($2, precio_boleta),
-        total_boletas    = COALESCE($3, total_boletas),
-        activo           = COALESCE($4, activo),
-        fuente_resultado = COALESCE($5, fuente_resultado)
-      WHERE id = $6
+        nombre                 = COALESCE($1, nombre),
+        precio_boleta          = COALESCE($2, precio_boleta),
+        total_boletas          = COALESCE($3, total_boletas),
+        activo                 = COALESCE($4, activo),
+        fuente_resultado       = COALESCE($5, fuente_resultado),
+        permite_elegir_numero  = COALESCE($6, permite_elegir_numero)
+      WHERE id = $7
       RETURNING *
-    `, [nombre, precio_boleta, total_boletas, activo, fuente_resultado, req.params.id]);
+    `, [nombre, precio_boleta, total_boletas, activo, fuente_resultado, permite_elegir_numero, req.params.id]);
 
     if (!rows.length) return res.status(404).json({ error: 'Modalidad no encontrada' });
     res.json(rows[0]);
