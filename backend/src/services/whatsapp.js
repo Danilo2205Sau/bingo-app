@@ -29,6 +29,7 @@ async function enviarCartonesPorWhatsApp(ventaId) {
 
   // Formatear número colombiano: 3101234567 → 573101234567
   const numeroFormateado = formatearNumero(telefono);
+  console.log(`[Venta ${ventaId}] Teléfono original: "${telefono}" → formateado: "${numeroFormateado}"`);
 
   const fecha = new Date(fecha_sorteo).toLocaleDateString('es-CO', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -82,12 +83,14 @@ async function enviarMensajeTexto(telefono, texto, ventaId) {
     body: JSON.stringify(body),
   });
 
-  if (!res.ok) {
+   if (!res.ok) {
     const err = await res.json();
     await registrarError(ventaId, JSON.stringify(err));
     throw new Error(`Meta API error: ${JSON.stringify(err)}`);
   }
-  return res.json();
+  const data = await res.json();
+  console.log(`[Venta ${ventaId}] Respuesta Meta (texto):`, JSON.stringify(data));
+  return data;
 }
 
 async function enviarDocumento(telefono, urlDoc, nombreArchivo, caption, ventaId) {
@@ -114,12 +117,14 @@ async function enviarDocumento(telefono, urlDoc, nombreArchivo, caption, ventaId
     body: JSON.stringify(body),
   });
 
-  if (!res.ok) {
+   if (!res.ok) {
     const err = await res.json();
     await registrarError(ventaId, JSON.stringify(err));
     throw new Error(`Meta API doc error: ${JSON.stringify(err)}`);
   }
-  return res.json();
+  const data = await res.json();
+  console.log(`[Venta ${ventaId}] Respuesta Meta (documento):`, JSON.stringify(data));
+  return data;
 }
 
 async function subirMediaWhatsApp(urlPdf, ventaId) {
