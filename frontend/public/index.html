@@ -8,23 +8,30 @@
     <link rel="stylesheet" href="css/bingo-bg.css" />
 </head>
 <body>
+  <!-- SELECTOR DE EVENTOS (cuando hay varios sorteos activos) -->
+  <section id="selector-eventos" class="container" style="display:none;padding-top:24px">
+    <h2 class="step-label" style="margin-bottom:14px">🎉 Sorteos activos — elige uno</h2>
+    <div id="eventos-grid" style="display:grid;gap:14px"></div>
+  </section>
 
   <!-- HERO -->
-  <header class="hero" id="hero-section">
+  <header class="hero" id="hero-section" style="display:none">
     <div class="hero-badge" id="sorteo-estado">Cargando sorteo...</div>
     <h1 id="sorteo-nombre">Gran Bingo</h1>
+    <img id="sorteo-imagen-premio" src="" alt="" style="display:none;max-width:220px;border-radius:12px;margin:10px auto;box-shadow:0 6px 20px rgba(0,0,0,.35)" />
     <div class="premio" id="sorteo-premio">$0</div>
     <p class="fecha" id="sorteo-fecha"></p>
     <div class="boletas-bar">
       <span>Boletas disponibles</span>
       <span id="boletas-restantes">...</span>
     </div>
+    <button class="btn-action" id="btn-cambiar-evento" style="margin-top:10px;background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.3)">↺ Elegir otro sorteo</button>
   </header>
 
-  <main class="container">
+  <main class="container" id="flujo-compra" style="display:none">
 
-    <!-- PASO 1: Cantidad -->
-    <section class="card">
+    <!-- PASO 1a: Cantidad (cuando NO se elige número) -->
+    <section class="card" id="paso-cantidad">
       <h2 class="step-label"><span class="step-num">1</span> Escoge tu cantidad</h2>
       <div class="qty-grid" id="qty-grid">
         <button class="qty-btn" data-qty="1" data-precio="0">
@@ -44,6 +51,14 @@
           <span class="qty-price" id="price-10">...</span>
         </button>
       </div>
+    </section>
+
+    <!-- PASO 1b: Elegir número (cuando la modalidad lo permite) -->
+    <section class="card" id="paso-elegir-numero" style="display:none">
+      <h2 class="step-label"><span class="step-num">1</span> Elige tu(s) número(s)</h2>
+      <p style="font-size:13px;color:#888;margin-bottom:10px">Toca los números que quieras. Se reservan por 20 minutos mientras completas tu compra.</p>
+      <div id="numeros-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:8px;max-height:280px;overflow-y:auto"></div>
+      <div id="numeros-estado" style="font-size:13px;margin-top:10px;color:#3C3489"></div>
     </section>
 
     <!-- PASO 2: Datos -->
