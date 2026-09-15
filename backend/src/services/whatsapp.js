@@ -10,7 +10,7 @@ const ACCESS_TOKEN    = process.env.META_ACCESS_TOKEN;
 
 async function enviarCartonesPorWhatsApp(ventaId) {
   const { rows } = await db.query(`
-    SELECT c.codigo_unico, c.pdf_url,
+    SELECT c.codigo_unico, c.pdf_url, c.tipo_boleta,
            comp.nombre, comp.telefono,
            s.nombre AS sorteo, s.fecha_sorteo, s.premio_descripcion,
            v.id AS venta_id
@@ -21,11 +21,11 @@ async function enviarCartonesPorWhatsApp(ventaId) {
     JOIN cartones c       ON c.id = vc.carton_id
     WHERE v.id = $1
   `, [ventaId]);
-  
 
   if (!rows.length) throw new Error(`Venta ${ventaId} sin cartones`);
 
-  const { nombre, telefono, sorteo, fecha_sorteo, premio_descripcion } = rows[0];
+  const { nombre, telefono, sorteo, fecha_sorteo, premio_descripcion, tipo_boleta } = rows[0];
+  const etiqueta = tipo_boleta === 'rifa' ? 'boleta' : 'cartón';
 
   // Formatear número colombiano: 3101234567 → 573101234567
   const numeroFormateado = formatearNumero(telefono);
@@ -35,8 +35,7 @@ async function enviarCartonesPorWhatsApp(ventaId) {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   });
 
-  // 1. Mensaje de bienvenida con texto
-   // 1. Mensaje de bienvenida — usa la plantilla aprobada por Meta para poder
+  // 1. Mensaje de bienvenida — usa la plantilla aprobada por Meta para poder
   //    iniciar la conversación sin depender de que el cliente escriba primero.
   //    Si la plantilla falla (no configurada/no aprobada aún), cae a texto libre
   //    como respaldo (que solo funcionará si la ventana de 24h ya está abierta).
@@ -64,7 +63,7 @@ async function enviarCartonesPorWhatsApp(ventaId) {
     );
   }
 
-   // 2. Enviar la hoja de cartones (un solo PDF con todos los cartones de esta venta)
+  // 2. Enviar la hoja de cartones/boletas (un solo PDF con todos los de esta venta)
   const pdfUrl = rows[0].pdf_url;
   if (!pdfUrl) throw new Error(`Venta ${ventaId} sin pdf_url asignado aún`);
 
@@ -72,8 +71,8 @@ async function enviarCartonesPorWhatsApp(ventaId) {
   await enviarDocumento(
     numeroFormateado,
     pdfUrl,
-    `Cartones-Venta-${ventaId.slice(0, 8)}.pdf`,
-    `🎴 Tus ${rows.length} cartón(es): ${codigosTexto} — Guárdalos, son tu boleta oficial.`,
+    `${etiqueta}es-Venta-${ventaId.slice(0, 8)}.pdf`,
+    `🎴 Tu(s) ${rows.length} ${etiqueta}(es): ${codigosTexto} — Guárdalos, son tu comprobante oficial.`,
     ventaId
   );
 
@@ -81,7 +80,7 @@ async function enviarCartonesPorWhatsApp(ventaId) {
   await db.query(`
     INSERT INTO notificaciones (venta_id, canal, estado, mensaje, enviado_en)
     VALUES ($1, 'whatsapp', 'enviado', $2, NOW())
-  `, [ventaId, `${rows.length} cartones enviados via Meta API`]);
+  `, [ventaId, `${rows.length} ${etiqueta}(es) enviados via Meta API`]);
 }
 
 
