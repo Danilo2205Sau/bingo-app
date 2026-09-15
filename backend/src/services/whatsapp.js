@@ -63,6 +63,10 @@ async function enviarCartonesPorWhatsApp(ventaId) {
     );
   }
 
+  // Pequeña pausa: dar tiempo a que Meta registre la ventana de conversación
+  // recién abierta por la plantilla, antes de mandar el documento de seguida.
+  await new Promise(r => setTimeout(r, 3000));
+
   // 2. Enviar la hoja de cartones/boletas (un solo PDF con todos los de esta venta)
   const pdfUrl = rows[0].pdf_url;
   if (!pdfUrl) throw new Error(`Venta ${ventaId} sin pdf_url asignado aún`);

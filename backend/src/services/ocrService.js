@@ -1,6 +1,20 @@
 const Tesseract = require('tesseract.js');
 
 async function extraerDatosComprobante(imagenUrl) {
+  // Tesseract NO puede leer PDFs (solo imágenes) — si el comprobante es un PDF,
+  // ni siquiera lo intentamos: evita un crash interno del worker de Tesseract
+  // que no se puede atrapar con try/catch normal.
+  if (/\.pdf(\?|$)/i.test(imagenUrl)) {
+    console.log('Comprobante es PDF, se omite OCR (Tesseract solo procesa imágenes)');
+    return {
+      referencia_pago:   null,
+      nombre_titular:    null,
+      monto_declarado:   null,
+      banco_origen:      null,
+      fecha_transaccion: null,
+    };
+  }
+
   try {
     const { data: { text } } = await Tesseract.recognize(imagenUrl, 'spa', {
       logger: () => {},
