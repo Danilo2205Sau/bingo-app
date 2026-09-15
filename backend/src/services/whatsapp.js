@@ -42,13 +42,14 @@ async function enviarCartonesPorWhatsApp(ventaId) {
   const nombrePlantilla = process.env.WHATSAPP_TEMPLATE_NOMBRE || 'confirmacion_pago_boleta';
   const idiomaPlantilla = process.env.WHATSAPP_TEMPLATE_IDIOMA || 'es';
 
-  try {
+    try {
     await enviarMensajePlantilla(
       numeroFormateado,
       nombrePlantilla,
       idiomaPlantilla,
       [nombre, sorteo, fecha, premio_descripcion || 'Gran Premio'],
-      ventaId
+      ventaId,
+      rows[0].pdf_url
     );
   } catch (errPlantilla) {
     console.error(`[Venta ${ventaId}] Falló envío por plantilla, intentando texto libre como respaldo:`, errPlantilla.message);
@@ -63,25 +64,8 @@ async function enviarCartonesPorWhatsApp(ventaId) {
     );
   }
 
-   // Pausa: dar tiempo a que Meta registre la ventana de conversación recién
-  // abierta por la plantilla, antes de mandar el documento. Se sube a 15s
-  // porque con 3s y 8s seguían fallando números sin historial previo.
-  const PAUSA_MS = 15000;
-  console.log(`[Venta ${ventaId}] Esperando ${PAUSA_MS}ms antes de enviar el documento...`);
-  await new Promise(r => setTimeout(r, PAUSA_MS));
-
-  // 2. Enviar la hoja de cartones/boletas (un solo PDF con todos los de esta venta)
   const pdfUrl = rows[0].pdf_url;
   if (!pdfUrl) throw new Error(`Venta ${ventaId} sin pdf_url asignado aún`);
-
-  const codigosTexto = rows.map(r => r.codigo_unico).join(', ');
-  await enviarDocumento(
-    numeroFormateado,
-    pdfUrl,
-    `${etiqueta}es-Venta-${ventaId.slice(0, 8)}.pdf`,
-    `🎴 Tu(s) ${rows.length} ${etiqueta}(es): ${codigosTexto} — Guárdalos, son tu comprobante oficial.`,
-    ventaId
-  );
 
   // Registrar notificación exitosa
   await db.query(`
@@ -91,7 +75,32 @@ async function enviarCartonesPorWhatsApp(ventaId) {
 }
 
 
-async function enviarMensajePlantilla(telefono, nombrePlantilla, idioma, variables, ventaId) {
+async function enviarMensajePlantilla(telefono, nombrePlantilla, idioma, variables, ventaId, documentoUrl = null) {
+  const components = [
+    {
+      type: 'body',
+      parameters: variables.map(v => ({ type: 'text', text: String(v) })),
+    },
+  ];
+
+  // Si hay un documento (la boleta en PDF), se manda DENTRO de la plantilla
+  // como encabezado — así Meta lo entrega junto con el mensaje aprobado,
+  // sin depender de una ventana de conversación posterior.
+  if (documentoUrl) {
+    components.unshift({
+      type: 'header',
+      parameters: [
+        {
+          type: 'document',
+          document: {
+            link: documentoUrl,
+            filename: 'Boleta.pdf',
+          },
+        },
+      ],
+    });
+  }
+
   const body = {
     messaging_product: 'whatsapp',
     to: telefono,
@@ -99,12 +108,7 @@ async function enviarMensajePlantilla(telefono, nombrePlantilla, idioma, variabl
     template: {
       name: nombrePlantilla,
       language: { code: idioma },
-      components: [
-        {
-          type: 'body',
-          parameters: variables.map(v => ({ type: 'text', text: String(v) })),
-        },
-      ],
+      components,
     },
   };
 
@@ -122,7 +126,8 @@ async function enviarMensajePlantilla(telefono, nombrePlantilla, idioma, variabl
     await registrarError(ventaId, JSON.stringify(err));
     throw new Error(`Meta API plantilla error: ${JSON.stringify(err)}`);
   }
-  const data = await res.json();
+  
+    const data = await res.json();
   console.log(`[Venta ${ventaId}] Respuesta Meta (plantilla):`, JSON.stringify(data));
   return data;
 }
