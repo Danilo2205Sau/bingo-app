@@ -244,6 +244,7 @@ async function generarBoletasConImagenPremio({
   fechaSorteoTexto,
   precioBoleta,
   whatsappContacto,
+  fuenteResultado,
   ventaId,
 }) {
   let imagenBuffer = null;
@@ -255,7 +256,7 @@ async function generarBoletasConImagenPremio({
   }
 
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'LETTER', margin: 0 });
+    const doc = new PDFDocument({ size: 'LETTER', layout: 'landscape', margin: 0 });
     const chunks = [];
     doc.on('data', (c) => chunks.push(c));
     doc.on('error', reject);
@@ -270,7 +271,7 @@ async function generarBoletasConImagenPremio({
     cartones.forEach((carton, idx) => {
       if (idx > 0) doc.addPage();
       dibujarBoletaConImagen(doc, {
-        carton, imagenBuffer, sorteoNombre, fechaSorteoTexto, precioBoleta, whatsappContacto,
+        carton, imagenBuffer, sorteoNombre, fechaSorteoTexto, precioBoleta, whatsappContacto, fuenteResultado,
       });
     });
 
@@ -278,58 +279,107 @@ async function generarBoletasConImagenPremio({
   });
 }
 
-function dibujarBoletaConImagen(doc, { carton, imagenBuffer, sorteoNombre, fechaSorteoTexto, precioBoleta, whatsappContacto }) {
+function dibujarBoletaConImagen(doc, { carton, imagenBuffer, sorteoNombre, fechaSorteoTexto, precioBoleta, whatsappContacto, fuenteResultado }) {
+  const ROJO      = '#7A1414';
+  const ROJO_OSC  = '#4A0C0C';
+  const DORADO    = '#FFD558';
+  const DORADO_OSC= '#C99A2E';
+  const NEGRO     = '#161616';
+  const CREMA     = '#FFF8EC';
+
   const pageW = doc.page.width, pageH = doc.page.height;
-  const stubW = 180;
-  const imgW = pageW - stubW;
+  const margen = 18;
+  const cardX = margen, cardY = margen;
+  const cardW = pageW - margen * 2, cardH = pageH - margen * 2;
 
-  // Panel izquierdo — la imagen de premiación (o un respaldo si no hay imagen)
+  // ── Marco exterior tipo tarjeta, rojo con esquinas redondeadas ──
+  doc.roundedRect(cardX, cardY, cardW, cardH, 16).lineWidth(3).stroke(ROJO);
+  doc.roundedRect(cardX + 4, cardY + 4, cardW - 8, cardH - 8, 12).lineWidth(1).stroke(DORADO);
+
+  const padInterno = 14;
+  const talonH = 42;
+  const innerX = cardX + padInterno;
+  const innerY = cardY + padInterno;
+  const innerW = cardW - padInterno * 2;
+  const innerH = cardH - padInterno * 2 - talonH;
+
+  // División horizontal: imagen a la izquierda (55%), info a la derecha (45%)
+  const imgPanelW = innerW * 0.55;
+  const infoPanelW = innerW - imgPanelW - 14;
+  const infoPanelX = innerX + imgPanelW + 14;
+
+  // ── Panel imagen: fondo negro + imagen COMPLETA sin recortar (fit, no cover) ──
+  doc.roundedRect(innerX, innerY, imgPanelW, innerH, 10).fill(NEGRO);
   if (imagenBuffer) {
-      doc.image(imagenBuffer, 0, 0, { cover: [imgW, pageH], align: 'center', valign: 'center' });
+    doc.save();
+    doc.roundedRect(innerX, innerY, imgPanelW, innerH, 10).clip();
+    doc.image(imagenBuffer, innerX, innerY, {
+      fit: [imgPanelW, innerH],
+      align: 'center',
+      valign: 'center',
+    });
+    doc.restore();
   } else {
-    doc.rect(0, 0, imgW, pageH).fill('#7A1414');
-    doc.fillColor('#FFD558').fontSize(26).font('Helvetica-Bold')
-      .text(sorteoNombre || 'SORTEO', 30, pageH / 2 - 60, { width: imgW - 60, align: 'center' });
-    doc.fillColor('#fff').fontSize(12).font('Helvetica')
-      .text('¡Mucha suerte!', 30, pageH / 2, { width: imgW - 60, align: 'center' });
+    doc.fillColor(DORADO).fontSize(22).font('Helvetica-Bold')
+      .text(sorteoNombre || 'SORTEO', innerX + 20, innerY + innerH / 2 - 30, { width: imgPanelW - 40, align: 'center' });
   }
 
-  // Línea divisoria punteada
-  doc.dash(4, { space: 4 }).moveTo(imgW, 0).lineTo(imgW, pageH).stroke('#ffffff');
-  doc.undash();
+  // ── Panel derecho: info estructurada ──
+  let y = innerY;
 
-  // Panel derecho (stub)
-  doc.rect(imgW, 0, stubW, pageH).fill('#111111');
+  // Encabezado del sorteo
+  doc.roundedRect(infoPanelX, y, infoPanelW, 34, 6).fill(ROJO_OSC);
+  doc.fillColor('#fff').fontSize(11).font('Helvetica-Bold')
+    .text((sorteoNombre || 'SORTEO').toUpperCase(), infoPanelX + 8, y + 10, { width: infoPanelW - 16, align: 'center' });
+  y += 42;
 
-  doc.rect(imgW, 26, stubW, 44).fill('#C0392B');
-  doc.fillColor('#FFD558').fontSize(11).font('Helvetica-Bold')
-    .text('NÚMERO DE TU BOLETA', imgW + 8, 42, { width: stubW - 16, align: 'center' });
+  // Caja dorada: TU NÚMERO DE LA SUERTE
+  const cajaNumH = 92;
+  doc.roundedRect(infoPanelX, y, infoPanelW, cajaNumH, 8)
+    .fill(DORADO);
+  doc.roundedRect(infoPanelX + 4, y + 4, infoPanelW - 8, cajaNumH - 8, 6)
+    .lineWidth(1).stroke(DORADO_OSC);
+  doc.fillColor(ROJO_OSC).fontSize(9).font('Helvetica-Bold')
+    .text('TU NÚMERO DE LA SUERTE', infoPanelX, y + 10, { width: infoPanelW, align: 'center' });
 
-  doc.roundedRect(imgW + 15, 88, stubW - 30, 130, 6).fill('#ffffff');
   const numerosTexto = (carton.numeros || []).join(' - ');
-  doc.fillColor('#111111').fontSize(numerosTexto.length > 8 ? 20 : 32).font('Helvetica-Bold')
-    .text(numerosTexto, imgW + 20, 138, { width: stubW - 40, align: 'center' });
+  const numFontSize = numerosTexto.length > 8 ? 22 : 34;
+  doc.fillColor(NEGRO).fontSize(numFontSize).font('Helvetica-Bold')
+    .text(numerosTexto, infoPanelX + 6, y + 38, { width: infoPanelW - 12, align: 'center' });
+  y += cajaNumH + 12;
 
-  doc.rect(imgW + 15, 236, stubW - 30, 24).fill('#FFD558');
-  doc.fillColor('#111111').fontSize(9).font('Helvetica-Bold')
-    .text('TU NÚMERO', imgW, 243, { width: stubW, align: 'center' });
+  // Filas de datos
+  const filas = [
+    ['Fecha del sorteo', fechaSorteoTexto || '-'],
+    ['Valor de la boleta', precioBoleta ? `$${Number(precioBoleta).toLocaleString('es-CO')}` : '-'],
+  ];
+  if (fuenteResultado) filas.push(['Cómo se define el ganador', fuenteResultado]);
 
-  let y = 285;
-  doc.fillColor('#cccccc').fontSize(7).font('Helvetica');
-  doc.text(`Código: ${carton.codigo_unico}`, imgW + 10, y, { width: stubW - 20, align: 'center' }); y += 15;
-  if (precioBoleta) {
-    doc.text(`Valor: $${Number(precioBoleta).toLocaleString('es-CO')}`, imgW + 10, y, { width: stubW - 20, align: 'center' }); y += 15;
-  }
-  if (fechaSorteoTexto) {
-    doc.text(fechaSorteoTexto, imgW + 10, y, { width: stubW - 20, align: 'center' });
-  }
+  filas.forEach(([label, valor]) => {
+    doc.roundedRect(infoPanelX, y, infoPanelW, 34, 6).fill(CREMA);
+    doc.fillColor(ROJO_OSC).fontSize(7).font('Helvetica-Bold')
+      .text(label.toUpperCase(), infoPanelX + 10, y + 5, { width: infoPanelW - 20 });
+    doc.fillColor(NEGRO).fontSize(9.5).font('Helvetica')
+      .text(valor, infoPanelX + 10, y + 16, { width: infoPanelW - 20 });
+    y += 40;
+  });
 
+  // WhatsApp de contacto
   if (whatsappContacto) {
-    doc.fillColor('#4ADE80').fontSize(8).font('Helvetica-Bold')
-      .text(`WhatsApp: ${whatsappContacto}`, imgW + 10, pageH - 50, { width: stubW - 20, align: 'center' });
+    doc.roundedRect(infoPanelX, y, infoPanelW, 30, 6).fill('#1D9E5F');
+    doc.fillColor('#fff').fontSize(9).font('Helvetica-Bold')
+      .text(`WhatsApp: ${whatsappContacto}`, infoPanelX, y + 9, { width: infoPanelW, align: 'center' });
+    y += 38;
   }
-  doc.fillColor('#888888').fontSize(6).font('Helvetica')
-    .text('Boleta válida una vez realizado el pago', imgW + 10, pageH - 30, { width: stubW - 20, align: 'center' });
+
+  // ── Franja inferior tipo "talón de boleta" (línea punteada + código) ──
+  const talonY = innerY + innerH + 14;
+  doc.dash(3, { space: 3 }).moveTo(cardX + 10, talonY).lineTo(cardX + cardW - 10, talonY).stroke(DORADO_OSC);
+  doc.undash();
+  doc.fillColor(ROJO_OSC).fontSize(8).font('Helvetica-Bold')
+    .text(`N° DE BOLETA: ${carton.codigo_unico}`, cardX, talonY + 8, { width: cardW, align: 'center' });
+  doc.fillColor('#999').fontSize(6).font('Helvetica')
+    .text('Boleta válida una vez realizado el pago', cardX, talonY + 20, { width: cardW, align: 'center' });
 }
 
 module.exports = { generarCartonPDF, generarHojaCartonesPDF, generarBoletasConImagenPremio };

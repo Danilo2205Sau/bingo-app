@@ -161,6 +161,7 @@ router.patch('/ventas/:id/aprobar', auth, async (req, res, next) => {
             fechaSorteoTexto,
             precioBoleta: modalidadInfo.precio_boleta,
             whatsappContacto,
+            fuenteResultado: modalidadInfo.fuente_resultado,
             ventaId: venta.id,
           }));
         } else {
