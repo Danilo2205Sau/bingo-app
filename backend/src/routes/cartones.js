@@ -97,6 +97,7 @@ router.get('/disponibles/:modalidadId', async (req, res, next) => {
       WHERE modalidad_id = $1
         AND vendido = false
         AND (reservado_hasta IS NULL OR reservado_hasta < NOW())
+        AND id NOT IN (SELECT carton_id FROM venta_cartones)
       ORDER BY numeros::text ASC
     `, [req.params.modalidadId]);
     res.json(rows);

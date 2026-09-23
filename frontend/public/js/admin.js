@@ -184,23 +184,34 @@ async function cargarBoletasExtraidas() {
       lista.innerHTML = '<div class="empty-pagos">Aún no has extraído boletas</div>';
       return;
     }
-    lista.innerHTML = ventas.map(v => `
-      <div class="pago-item">
+    const estadoTexto = { pendiente: 'Pendiente de pago', aprobado: 'Pago aprobado', rechazado: 'Pago rechazado' };
+
+    lista.innerHTML = ventas.map(v => {
+      const codigos = (v.cartones || []).map(c => {
+        const num = Array.isArray(c.numeros) ? c.numeros.join('-') : c.codigo_unico;
+        return `<span style="display:inline-block;background:#F0EEFB;color:#3C3489;border-radius:6px;padding:2px 8px;margin:2px;font-size:11px">${num}</span>`;
+      }).join('');
+
+      return `
+      <div class="pago-item" style="flex-wrap:wrap">
         <div class="avatar">${iniciales(v.comprador_nombre || 'AD')}</div>
         <div class="pago-meta">
           <strong>${v.comprador_nombre}</strong>
           <span>${v.cantidad} boleta(s) · ${v.sorteo_nombre} · ${tiempoRelativo(v.creado_en)}</span>
           <span style="display:block;color:#3C3489;font-weight:500">${formatCOP(v.total_pagado)} · ${v.comprador_telefono}</span>
+          <div style="margin-top:4px">${codigos}</div>
         </div>
         <div class="pago-acciones">
-          <span class="badge ${badgeClaseEstado(v.estado_pago === 'aprobado' ? 'activo' : v.estado_pago === 'rechazado' ? 'cerrado' : 'borrador')}">${v.estado_pago}</span>
+          <span class="badge ${badgeClaseEstado(v.estado_pago === 'aprobado' ? 'activo' : v.estado_pago === 'rechazado' ? 'cerrado' : 'borrador')}">${estadoTexto[v.estado_pago] || v.estado_pago}</span>
           ${v.estado_pago === 'pendiente' ? `
             <button class="btn-aprobar" onclick="aprobarVenta('${v.id}')">✓</button>
             <button class="btn-rechazar" onclick="rechazarVenta('${v.id}','')">✕</button>
           ` : ''}
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
+    
   } catch (err) {
     lista.innerHTML = `<div class="empty-pagos" style="color:#D85A30">${err.message}</div>`;
   }

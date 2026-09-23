@@ -1,6 +1,7 @@
 const router   = require('express').Router();
 const db       = require('../config/db');
 const { extraerDatosComprobante } = require('../services/ocrService');
+const { asignarCartonesAVenta } = require('../services/asignacion');
 const upload   = require('../middleware/upload');
 
 // POST /api/ventas — crear una venta (comprador llena el formulario)
@@ -55,36 +56,45 @@ router.post('/', upload.single('comprobante'), async (req, res, next) => {
       comprobante_url = req.file.path;
     }
 
-    const { rows: venta } = await db.query(`
-      INSERT INTO ventas
-        (comprador_id, sorteo_id, modalidad_id, cantidad, total_pagado, metodo_pago, comprobante_url)
-      VALUES ($1,$2,$3,$4,$5,$6,$7)
-      RETURNING id, estado_pago, creado_en
-    `, [comprador_id, sorteo_id, modalidad_id, cant, total, metodo_pago, comprobante_url]);
+      const client = await db.pool.connect();
+    let ventaId;
+    try {
+      await client.query('BEGIN');
 
-    const ventaId = venta[0].id;
+      const { rows: venta } = await client.query(`
+        INSERT INTO ventas
+          (comprador_id, sorteo_id, modalidad_id, cantidad, total_pagado, metodo_pago, comprobante_url)
+        VALUES ($1,$2,$3,$4,$5,$6,$7)
+        RETURNING id, estado_pago, creado_en
+      `, [comprador_id, sorteo_id, modalidad_id, cant, total, metodo_pago, comprobante_url]);
+      ventaId = venta[0].id;
 
-    // Si el comprador eligió números específicos (ya reservados), vincularlos a esta venta
-    // y extender la reserva 48h mientras el admin revisa el pago (en vez de expirar en 20 min)
-    let idsElegidos = [];
-    if (carton_ids) {
-      try { idsElegidos = typeof carton_ids === 'string' ? JSON.parse(carton_ids) : carton_ids; }
-      catch { idsElegidos = []; }
-    }
-    if (Array.isArray(idsElegidos) && idsElegidos.length) {
-      const { rowCount } = await db.query(`
-        UPDATE cartones SET
-          reservado_venta_id = $1,
-          reservado_hasta    = NOW() + INTERVAL '48 hours'
-        WHERE id = ANY($2::uuid[])
-          AND modalidad_id = $3
-          AND vendido = false
-          AND (reservado_hasta IS NULL OR reservado_hasta > NOW())
-      `, [ventaId, idsElegidos, modalidad_id]);
-
-      if (rowCount < idsElegidos.length) {
-        console.error(`Venta ${ventaId}: solo se vincularon ${rowCount}/${idsElegidos.length} cartones elegidos (reserva pudo expirar)`);
+      // Si el comprador eligió números específicos, vincularlos primero
+      let idsElegidos = [];
+      if (carton_ids) {
+        try { idsElegidos = typeof carton_ids === 'string' ? JSON.parse(carton_ids) : carton_ids; }
+        catch { idsElegidos = []; }
       }
+      if (Array.isArray(idsElegidos) && idsElegidos.length) {
+        await client.query(`
+          UPDATE cartones SET reservado_venta_id = $1, reservado_hasta = NULL
+          WHERE id = ANY($2::uuid[]) AND modalidad_id = $3 AND vendido = false
+        `, [ventaId, idsElegidos, modalidad_id]);
+      }
+
+      // Asignar (y dejar visibles de inmediato) los cartones de esta venta
+      const asignados = await asignarCartonesAVenta(client, { modalidadId: modalidad_id, ventaId, cantidad: cant });
+      if (!asignados) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'No hay suficientes boletas disponibles en esta modalidad' });
+      }
+
+      await client.query('COMMIT');
+    } catch (errTx) {
+      await client.query('ROLLBACK');
+      throw errTx;
+    } finally {
+      client.release();
     }
 
     // OCR asíncrono — no bloquea la respuesta al comprador

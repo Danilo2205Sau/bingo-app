@@ -1,0 +1,1 @@
+ALTER TYPE metodo_pago ADD VALUE IF NOT EXISTS 'fisico';

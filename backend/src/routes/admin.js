@@ -3,6 +3,7 @@ const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
 const db      = require('../config/db');
 const auth    = require('../middleware/auth');
+const { asignarCartonesAVenta } = require('../services/asignacion');
 
 // POST /api/admin/login
 router.post('/login', async (req, res, next) => {
@@ -102,25 +103,44 @@ router.post('/extraer-boletas', auth, async (req, res, next) => {
       RETURNING id
     `, [(nombre || 'Administrador').trim(), telefono.trim()]);
 
-    const { rows: venta } = await db.query(`
-      INSERT INTO ventas
-        (comprador_id, sorteo_id, modalidad_id, cantidad, total_pagado, metodo_pago, estado_pago, es_administrador)
-      VALUES ($1,$2,$3,$4,$5,'fisico','pendiente', true)
-      RETURNING id, estado_pago, creado_en
-    `, [comp[0].id, sorteo_id, modalidad_id, cant, total]);
+    const client = await db.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: venta } = await client.query(`
+        INSERT INTO ventas
+          (comprador_id, sorteo_id, modalidad_id, cantidad, total_pagado, metodo_pago, estado_pago, es_administrador)
+        VALUES ($1,$2,$3,$4,$5,'fisico','pendiente', true)
+        RETURNING id, estado_pago, creado_en
+      `, [comp[0].id, sorteo_id, modalidad_id, cant, total]);
 
-    res.status(201).json({
-      message: `${cant} boleta(s) reservada(s) — pendiente por cobrar`,
-      venta_id: venta[0].id,
-      total_pagado: total,
-    });
+      const asignados = await asignarCartonesAVenta(client, {
+        modalidadId: modalidad_id, ventaId: venta[0].id, cantidad: cant,
+      });
+      if (!asignados) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'No hay suficientes boletas disponibles en esta modalidad' });
+      }
+
+      await client.query('COMMIT');
+      res.status(201).json({
+        message: `${cant} boleta(s) reservada(s) — pendiente por cobrar`,
+        venta_id: venta[0].id,
+        total_pagado: total,
+        cartones: asignados.map(c => ({ codigo_unico: c.codigo_unico, numeros: c.numeros })),
+      });
+    } catch (errTx) {
+      await client.query('ROLLBACK');
+      throw errTx;
+    } finally {
+      client.release();
+    }
   } catch (err) { next(err); }
 });
 
 // GET /api/admin/boletas-extraidas — las ventas directas del admin, con su estado
 router.get('/boletas-extraidas', auth, async (req, res, next) => {
   try {
-    const { rows } = await db.query(`
+    const { rows: ventas } = await db.query(`
       SELECT v.id, v.cantidad, v.total_pagado, v.estado_pago, v.creado_en,
              c.nombre AS comprador_nombre, c.telefono AS comprador_telefono,
              s.nombre AS sorteo_nombre, m.nombre AS modalidad_nombre
@@ -131,7 +151,19 @@ router.get('/boletas-extraidas', auth, async (req, res, next) => {
       WHERE v.es_administrador = true
       ORDER BY v.creado_en DESC
     `);
-    res.json(rows);
+    if (!ventas.length) return res.json([]);
+
+    const { rows: cartones } = await db.query(`
+      SELECT vc.venta_id, c.codigo_unico, c.numeros
+      FROM venta_cartones vc
+      JOIN cartones c ON c.id = vc.carton_id
+      WHERE vc.venta_id = ANY($1::uuid[])
+    `, [ventas.map(v => v.id)]);
+
+    res.json(ventas.map(v => ({
+      ...v,
+      cartones: cartones.filter(c => c.venta_id === v.id),
+    })));
   } catch (err) { next(err); }
 });
 
@@ -156,43 +188,23 @@ router.patch('/ventas/:id/aprobar', auth, async (req, res, next) => {
 
     const venta = rows[0];
 
-    // 2. Asignar boletas: primero las que el comprador eligió y reservó (si las hay),
-    //    completando con asignación aleatoria del resto disponible en la modalidad
-    const yaElegidos = await client.query(`
-      SELECT id, codigo_unico, numeros, tipo_boleta FROM cartones
-      WHERE reservado_venta_id = $1 AND vendido = false
-      FOR UPDATE
+    // 2. Los cartones ya quedaron asignados desde que se creó la venta —
+    //    aquí solo los marcamos como vendidos (pagados)
+    const cartones = await client.query(`
+      SELECT c.id, c.codigo_unico, c.numeros, c.tipo_boleta
+      FROM cartones c
+      JOIN venta_cartones vc ON vc.carton_id = c.id
+      WHERE vc.venta_id = $1
+      FOR UPDATE OF c
     `, [venta.id]);
-
-    const faltanPorAsignar = venta.cantidad - yaElegidos.rows.length;
-    let asignadosAlAzar = { rows: [] };
-
-    if (faltanPorAsignar > 0) {
-      asignadosAlAzar = await client.query(`
-        SELECT id, codigo_unico, numeros, tipo_boleta FROM cartones
-        WHERE modalidad_id = $1 AND vendido = false
-          AND (reservado_hasta IS NULL OR reservado_hasta < NOW())
-        LIMIT $2
-        FOR UPDATE SKIP LOCKED
-      `, [venta.modalidad_id, faltanPorAsignar]);
-    }
-
-    const cartones = { rows: [...yaElegidos.rows, ...asignadosAlAzar.rows] };
 
     if (cartones.rows.length < venta.cantidad) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'No hay suficientes boletas disponibles en esta modalidad' });
+      return res.status(409).json({ error: 'Esta venta no tiene boletas asignadas (dato inconsistente)' });
     }
 
-    // 3. Marcar cartones como vendidos e insertar en venta_cartones
     for (const carton of cartones.rows) {
-      await client.query(
-        'UPDATE cartones SET vendido = true WHERE id = $1', [carton.id]
-      );
-      await client.query(
-        'INSERT INTO venta_cartones (venta_id, carton_id) VALUES ($1, $2)',
-        [venta.id, carton.id]
-      );
+      await client.query('UPDATE cartones SET vendido = true WHERE id = $1', [carton.id]);
     }
 
     await client.query('COMMIT');
@@ -278,13 +290,14 @@ router.patch('/ventas/:id/rechazar', auth, async (req, res, next) => {
       WHERE id = $2
     `, [notas || '', req.params.id]);
 
-    // Liberar de inmediato cualquier número que el comprador hubiera elegido/reservado
+    // Desvincular y liberar las boletas de esta venta (el trigger descuenta el contador solo)
+    await db.query('DELETE FROM venta_cartones WHERE venta_id = $1', [req.params.id]);
     await db.query(`
-      UPDATE cartones SET reservado_venta_id = NULL, reservado_hasta = NULL
+      UPDATE cartones SET reservado_venta_id = NULL, reservado_hasta = NULL, vendido = false
       WHERE reservado_venta_id = $1
     `, [req.params.id]);
 
-    res.json({ message: 'Venta rechazada' });
+    res.json({ message: 'Venta rechazada, boletas liberadas' });
   } catch (err) { next(err); }
 });
 
