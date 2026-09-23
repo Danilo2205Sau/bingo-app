@@ -94,76 +94,69 @@ router.post('/extraer-boletas', auth, async (req, res, next) => {
     if (cant > disponibles)
       return res.status(409).json({ error: `Solo quedan ${disponibles} boleta(s) disponibles en esta modalidad` });
 
-    const total = parseFloat(modalidad.precio_boleta) * cant;
-
     const { rows: comp } = await db.query(`
       INSERT INTO compradores (nombre, telefono)
       VALUES ($1, $2)
       ON CONFLICT (telefono) DO UPDATE SET nombre = EXCLUDED.nombre
       RETURNING id
     `, [(nombre || 'Administrador').trim(), telefono.trim()]);
+    const compradorId = comp[0].id;
 
+    // Una venta INDEPENDIENTE por cada boleta, para poder aprobar/rechazar una a una
+    const creadas = [];
     const client = await db.pool.connect();
     try {
-      await client.query('BEGIN');
-      const { rows: venta } = await client.query(`
-        INSERT INTO ventas
-          (comprador_id, sorteo_id, modalidad_id, cantidad, total_pagado, metodo_pago, estado_pago, es_administrador)
-        VALUES ($1,$2,$3,$4,$5,'fisico','pendiente', true)
-        RETURNING id, estado_pago, creado_en
-      `, [comp[0].id, sorteo_id, modalidad_id, cant, total]);
+      for (let i = 0; i < cant; i++) {
+        await client.query('BEGIN');
+        const { rows: venta } = await client.query(`
+          INSERT INTO ventas
+            (comprador_id, sorteo_id, modalidad_id, cantidad, total_pagado, metodo_pago, estado_pago, es_administrador)
+          VALUES ($1,$2,$3,1,$4,'fisico','pendiente', true)
+          RETURNING id
+        `, [compradorId, sorteo_id, modalidad_id, modalidad.precio_boleta]);
 
-      const asignados = await asignarCartonesAVenta(client, {
-        modalidadId: modalidad_id, ventaId: venta[0].id, cantidad: cant,
-      });
-      if (!asignados) {
-        await client.query('ROLLBACK');
-        return res.status(409).json({ error: 'No hay suficientes boletas disponibles en esta modalidad' });
+        const asignados = await asignarCartonesAVenta(client, {
+          modalidadId: modalidad_id, ventaId: venta[0].id, cantidad: 1,
+        });
+        if (!asignados) {
+          await client.query('ROLLBACK');
+          break;
+        }
+        await client.query('COMMIT');
+        creadas.push({ venta_id: venta[0].id, codigo_unico: asignados[0].codigo_unico, numeros: asignados[0].numeros });
       }
-
-      await client.query('COMMIT');
-      res.status(201).json({
-        message: `${cant} boleta(s) reservada(s) — pendiente por cobrar`,
-        venta_id: venta[0].id,
-        total_pagado: total,
-        cartones: asignados.map(c => ({ codigo_unico: c.codigo_unico, numeros: c.numeros })),
-      });
-    } catch (errTx) {
-      await client.query('ROLLBACK');
-      throw errTx;
     } finally {
       client.release();
     }
+
+    if (!creadas.length)
+      return res.status(409).json({ error: 'No se pudo reservar ninguna boleta (sin disponibilidad)' });
+
+    res.status(201).json({
+      message: `${creadas.length} boleta(s) reservada(s) — pendiente por cobrar`,
+      cartones: creadas,
+    });
   } catch (err) { next(err); }
 });
 
 // GET /api/admin/boletas-extraidas — las ventas directas del admin, con su estado
 router.get('/boletas-extraidas', auth, async (req, res, next) => {
   try {
-    const { rows: ventas } = await db.query(`
-      SELECT v.id, v.cantidad, v.total_pagado, v.estado_pago, v.creado_en,
+    const { rows } = await db.query(`
+      SELECT v.id AS venta_id, v.estado_pago, v.total_pagado, v.creado_en,
              c.nombre AS comprador_nombre, c.telefono AS comprador_telefono,
-             s.nombre AS sorteo_nombre, m.nombre AS modalidad_nombre
+             s.nombre AS sorteo_nombre, m.nombre AS modalidad_nombre,
+             cart.codigo_unico, cart.numeros
       FROM ventas v
       JOIN compradores c ON c.id = v.comprador_id
       JOIN sorteos s ON s.id = v.sorteo_id
       LEFT JOIN modalidades m ON m.id = v.modalidad_id
+      LEFT JOIN venta_cartones vc ON vc.venta_id = v.id
+      LEFT JOIN cartones cart ON cart.id = vc.carton_id
       WHERE v.es_administrador = true
       ORDER BY v.creado_en DESC
     `);
-    if (!ventas.length) return res.json([]);
-
-    const { rows: cartones } = await db.query(`
-      SELECT vc.venta_id, c.codigo_unico, c.numeros
-      FROM venta_cartones vc
-      JOIN cartones c ON c.id = vc.carton_id
-      WHERE vc.venta_id = ANY($1::uuid[])
-    `, [ventas.map(v => v.id)]);
-
-    res.json(ventas.map(v => ({
-      ...v,
-      cartones: cartones.filter(c => c.venta_id === v.id),
-    })));
+    res.json(rows);
   } catch (err) { next(err); }
 });
 

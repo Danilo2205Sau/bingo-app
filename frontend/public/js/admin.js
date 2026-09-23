@@ -88,6 +88,14 @@ function inicializarEventos() {
   document.getElementById('boletas-sorteo-select').addEventListener('change', buscarBoletas);
 
   document.getElementById('btn-extraer-boletas').addEventListener('click', extraerBoletas);
+
+  document.getElementById('btn-toggle-extraidas').addEventListener('click', () => {
+    panelExtraidasAbierto = !panelExtraidasAbierto;
+    document.getElementById('extraidas-panel').style.display = panelExtraidasAbierto ? 'block' : 'none';
+    if (panelExtraidasAbierto) cargarBoletasExtraidas();
+  });
+
+  document.getElementById('extraidas-buscar').addEventListener('input', renderExtraidas);
 }
 
 async function hacerLogin() {
@@ -123,8 +131,11 @@ function entrarAlPanel(nombre) {
 }
 
 async function cargarDatos() {
-  await Promise.all([cargarMetricas(), cargarPendientes(), cargarEventos(), cargarBoletasExtraidas()]);
+  await Promise.all([cargarMetricas(), cargarPendientes(), cargarEventos()]);
 }
+
+let todasLasExtraidas = [];
+let panelExtraidasAbierto = false;
 
 function poblarSelectExtraer() {
   const select = document.getElementById('extraer-sorteo-select');
@@ -177,43 +188,78 @@ async function extraerBoletas() {
 
 async function cargarBoletasExtraidas() {
   const lista = document.getElementById('extraidas-lista');
-  if (!lista) return;
+  lista.innerHTML = '<div class="empty-pagos">Cargando...</div>';
   try {
-    const ventas = await Api.getBoletasExtraidas(tokenAdmin);
-    if (!ventas.length) {
-      lista.innerHTML = '<div class="empty-pagos">Aún no has extraído boletas</div>';
-      return;
-    }
-    const estadoTexto = { pendiente: 'Pendiente de pago', aprobado: 'Pago aprobado', rechazado: 'Pago rechazado' };
+    todasLasExtraidas = await Api.getBoletasExtraidas(tokenAdmin);
+    renderExtraidas();
+  } catch (err) {
+    lista.innerHTML = `<div class="empty-pagos" style="color:#D85A30">${err.message}</div>`;
+  }
+}
 
-    lista.innerHTML = ventas.map(v => {
-      const codigos = (v.cartones || []).map(c => {
-        const num = Array.isArray(c.numeros) ? c.numeros.join('-') : c.codigo_unico;
-        return `<span style="display:inline-block;background:#F0EEFB;color:#3C3489;border-radius:6px;padding:2px 8px;margin:2px;font-size:11px">${num}</span>`;
-      }).join('');
+function renderExtraidas() {
+  const lista = document.getElementById('extraidas-lista');
+  const q = (document.getElementById('extraidas-buscar').value || '').toLowerCase().trim();
 
-      return `
-      <div class="pago-item" style="flex-wrap:wrap">
-        <div class="avatar">${iniciales(v.comprador_nombre || 'AD')}</div>
-        <div class="pago-meta">
-          <strong>${v.comprador_nombre}</strong>
-          <span>${v.cantidad} boleta(s) · ${v.sorteo_nombre} · ${tiempoRelativo(v.creado_en)}</span>
-          <span style="display:block;color:#3C3489;font-weight:500">${formatCOP(v.total_pagado)} · ${v.comprador_telefono}</span>
-          <div style="margin-top:4px">${codigos}</div>
+  let items = todasLasExtraidas;
+  if (q) {
+    items = items.filter(v => {
+      const numTexto = Array.isArray(v.numeros) ? v.numeros.join('-') : '';
+      return (v.codigo_unico || '').toLowerCase().includes(q)
+          || numTexto.toLowerCase().includes(q)
+          || (v.comprador_telefono || '').includes(q);
+    });
+  }
+
+  if (!items.length) {
+    lista.innerHTML = `<div class="empty-pagos">${q ? 'Sin resultados' : 'Aún no has extraído boletas'}</div>`;
+    return;
+  }
+
+  const estadoTexto = { pendiente: 'Pendiente de pago', aprobado: 'Pago aprobado', rechazado: 'Pago rechazado' };
+
+  lista.innerHTML = items.map(v => {
+    const numTexto = Array.isArray(v.numeros) ? v.numeros.join('-') : (v.codigo_unico || '—');
+    return `
+      <div class="boleta-row" style="padding:10px">
+        <div>
+          <span class="num">${numTexto}</span>
+          <span style="color:#888"> · ${v.codigo_unico || ''}</span>
+          <div style="color:#888;font-size:11px">${v.comprador_telefono} · ${tiempoRelativo(v.creado_en)}</div>
         </div>
-        <div class="pago-acciones">
+        <div style="display:flex;align-items:center;gap:6px">
           <span class="badge ${badgeClaseEstado(v.estado_pago === 'aprobado' ? 'activo' : v.estado_pago === 'rechazado' ? 'cerrado' : 'borrador')}">${estadoTexto[v.estado_pago] || v.estado_pago}</span>
           ${v.estado_pago === 'pendiente' ? `
-            <button class="btn-aprobar" onclick="aprobarVenta('${v.id}')">✓</button>
-            <button class="btn-rechazar" onclick="rechazarVenta('${v.id}','')">✕</button>
+            <button class="btn-aprobar" onclick="aprobarVentaExtraida('${v.venta_id}')">✓</button>
+            <button class="btn-rechazar" onclick="rechazarVentaExtraida('${v.venta_id}')">✕</button>
           ` : ''}
         </div>
       </div>
     `;
-    }).join('');
-    
+  }).join('');
+}
+
+async function aprobarVentaExtraida(id) {
+  if (!confirm('¿Confirmar que ya te pagaron esta boleta?')) return;
+  try {
+    await Api.aprobarVenta(id, tokenAdmin);
+    mostrarToast('✓ Boleta marcada como pagada', 'success');
+    cargarBoletasExtraidas();
+    cargarMetricas();
   } catch (err) {
-    lista.innerHTML = `<div class="empty-pagos" style="color:#D85A30">${err.message}</div>`;
+    mostrarToast(err.message, 'error');
+  }
+}
+
+async function rechazarVentaExtraida(id) {
+  if (!confirm('¿Rechazar/liberar esta boleta?')) return;
+  try {
+    await Api.rechazarVenta(id, '', tokenAdmin);
+    mostrarToast('Boleta liberada', 'warning');
+    cargarBoletasExtraidas();
+    cargarMetricas();
+  } catch (err) {
+    mostrarToast(err.message, 'error');
   }
 }
 
