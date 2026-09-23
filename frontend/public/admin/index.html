@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin — Bingo</title>
+  <title>Admin — Sorteos El Ganador Co.</title>
   <link rel="stylesheet" href="../css/main.css" />
   <link rel="stylesheet" href="../css/admin-theme.css" />
   <style>
@@ -199,10 +199,15 @@
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:10px">
       <button class="btn-hamburguesa" id="btn-hamburguesa">☰</button>
-      <strong>🎱 Panel Bingo</strong>
-      <span id="admin-nombre" style="font-size:12px;color:#AFA9EC;margin-left:8px"></span>
+      <strong>👑 Sorteos El Ganador Co.</strong>
     </div>
-    <button class="btn-logout" id="btn-logout">Cerrar sesión</button>
+    <div class="topbar-right">
+      <span class="badge-sistema"><span class="dot"></span> Sistema operativo</span>
+      <button class="btn-icono" title="Notificaciones">🔔</button>
+      <div class="avatar-corona"><span class="corona-emoji">👑</span></div>
+      <span id="admin-nombre" style="font-size:12px;color:#B8AF98"></span>
+      <button class="btn-logout" id="btn-logout">Cerrar sesión</button>
+    </div>
   </div>
 
   <div class="sidebar-overlay" id="sidebar-overlay"></div>
@@ -231,6 +236,15 @@
       <button class="nav-item proximamente" title="Próximamente">
         <span class="nav-icon">⚙️</span> Configuración
       </button>
+
+      <div class="sidebar-footer">
+        <span class="destello-grande" style="top:8px;left:20px;animation-delay:.3s"></span>
+        <span class="destello-grande" style="top:20px;right:16px;animation-delay:1.1s"></span>
+        <span class="destello-grande" style="bottom:36px;left:30%;animation-delay:.7s"></span>
+        <span class="corona-grande">👑</span>
+        <div class="tagline">GRANDES SUEÑOS<br>TAMBIÉN SE JUEGAN</div>
+        <div class="marca">Sorteos El Ganador Co.</div>
+      </div>
     </nav>
 
     <!-- ── ÁREA PRINCIPAL ───────────────────────────────── -->
@@ -243,23 +257,27 @@
           <!-- Métricas -->
           <div class="metrics-grid" id="metricas">
             <div class="metric-card">
+              <div class="metric-icon" style="background:rgba(52,216,116,0.15);color:#5CE79A">🎫</div>
               <div class="metric-label">Boletas vendidas</div>
               <div class="metric-value" id="m-boletas">—</div>
               <div class="metric-sub" id="m-boletas-sub"></div>
             </div>
             <div class="metric-card">
+              <div class="metric-icon" style="background:rgba(232,193,88,0.18);color:#FFD558">💰</div>
               <div class="metric-label">Dinero recaudado</div>
               <div class="metric-value" id="m-dinero">—</div>
               <div class="metric-sub">aprobados</div>
             </div>
             <div class="metric-card">
+              <div class="metric-icon" style="background:rgba(52,216,116,0.15);color:#5CE79A">👥</div>
               <div class="metric-label">Compradores</div>
               <div class="metric-value" id="m-compradores">—</div>
               <div class="metric-sub">únicos</div>
             </div>
             <div class="metric-card">
+              <div class="metric-icon" style="background:rgba(232,193,88,0.18);color:#FFD558">⏳</div>
               <div class="metric-label">Pagos pendientes</div>
-              <div class="metric-value" id="m-pendientes" style="color:#EF9F27">—</div>
+              <div class="metric-value" id="m-pendientes" style="color:#FFD558">—</div>
               <div class="metric-sub">por revisar</div>
             </div>
           </div>
