@@ -34,7 +34,43 @@
       border:0.5px solid #534AB7; border-radius:6px;
       padding:4px 10px; cursor:pointer
     }
-    .admin-container { max-width:680px; margin:0 auto; padding:16px }
+
+    /* ── Layout con barra lateral ─────────── */
+    .app-shell { display:flex; min-height:calc(100vh - 49px) }
+    .sidebar {
+      width:220px; flex-shrink:0;
+      padding:16px 10px;
+      display:flex; flex-direction:column; gap:2px;
+    }
+    .nav-item {
+      display:flex; align-items:center; gap:10px;
+      padding:10px 14px; border-radius:10px;
+      font-size:13.5px; font-weight:500; cursor:pointer;
+      color:#9497B8; background:transparent; border:none; width:100%; text-align:left;
+    }
+    .nav-item .nav-icon { font-size:15px; width:18px; text-align:center }
+    .nav-item.activo {
+      background:linear-gradient(135deg,#7C5CFF,#5B3FE0);
+      color:#fff;
+      box-shadow:0 4px 14px rgba(124,92,255,0.4);
+    }
+    .nav-item:not(.activo):hover { background:rgba(255,255,255,0.05); color:#E8E9F3 }
+    .nav-item.proximamente { opacity:.5; cursor:default }
+    .nav-item.proximamente:hover { background:transparent; color:#9497B8 }
+
+    .main-area { flex:1; min-width:0 }
+    .admin-container { max-width:900px; margin:0 auto; padding:16px }
+    .modulo { display:none }
+    .modulo.activo { display:block }
+
+    @media (max-width: 820px) {
+      .app-shell { flex-direction:column }
+      .sidebar {
+        width:100%; flex-direction:row; overflow-x:auto;
+        padding:10px; gap:6px;
+      }
+      .nav-item { white-space:nowrap; flex-shrink:0 }
+    }
 
     .section-title {
       font-size:14px; font-weight:500; color:#444;
@@ -150,265 +186,257 @@
     <button class="btn-logout" id="btn-logout">Cerrar sesión</button>
   </div>
 
-  <div class="admin-container">
-
-    <!-- Métricas -->
-    <div class="metrics-grid" id="metricas">
-      <div class="metric-card">
-        <div class="metric-label">Boletas vendidas</div>
-        <div class="metric-value" id="m-boletas">—</div>
-        <div class="metric-sub" id="m-boletas-sub"></div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Dinero recaudado</div>
-        <div class="metric-value" id="m-dinero">—</div>
-        <div class="metric-sub">aprobados</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Compradores</div>
-        <div class="metric-value" id="m-compradores">—</div>
-        <div class="metric-sub">únicos</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Pagos pendientes</div>
-        <div class="metric-value" id="m-pendientes" style="color:#EF9F27">—</div>
-        <div class="metric-sub">por revisar</div>
-      </div>
-    </div>
-
-    <!-- Sorteo activo -->
-    <div class="section-title">Sorteo activo</div>
-    <div class="sorteo-activo" id="sorteo-info">
-      <p style="color:#888;font-size:14px">Cargando...</p>
-    </div>
-
-    <!-- Acciones -->
-    <div class="actions-row">
-      <button class="btn-action primary" id="btn-toggle-form">
-        ＋ Nuevo sorteo
+  <div class="app-shell">
+    <!-- ── BARRA LATERAL ────────────────────────────────── -->
+    <nav class="sidebar">
+      <button class="nav-item activo" data-modulo="inicio">
+        <span class="nav-icon">🏠</span> Inicio
       </button>
-      <button class="btn-action" id="btn-recargar">
-        ↻ Recargar
+      <button class="nav-item" data-modulo="sorteos">
+        <span class="nav-icon">🎯</span> Sorteos
       </button>
-      <a href="../../index.html" target="_blank" class="btn-action">
-        👁 Ver página pública
-      </a>
-    </div>
+      <button class="nav-item" data-modulo="boletas">
+        <span class="nav-icon">🎫</span> Boletas
+      </button>
+      <button class="nav-item" data-modulo="pagos">
+        <span class="nav-icon">💳</span> Pagos
+      </button>
+      <button class="nav-item proximamente" title="Próximamente">
+        <span class="nav-icon">👥</span> Compradores
+      </button>
+      <button class="nav-item proximamente" title="Próximamente">
+        <span class="nav-icon">📊</span> Reportes
+      </button>
+      <button class="nav-item proximamente" title="Próximamente">
+        <span class="nav-icon">⚙️</span> Configuración
+      </button>
+    </nav>
 
-    <!-- Form crear evento (oculto por defecto) -->
-    <div id="form-sorteo">
-      <div class="section-title" style="margin-top:0">Crear nuevo evento (Bingo o Rifa/Sorteo)</div>
+    <!-- ── ÁREA PRINCIPAL ───────────────────────────────── -->
+    <div class="main-area">
+      <div class="admin-container">
 
-      <div class="form-group">
-        <label>Nombre del evento</label>
-        <input type="text" id="s-nombre" placeholder="Gran Bingo de la Fortuna" />
-      </div>
-      <div class="form-group">
-        <label>Descripción corta (opcional)</label>
-        <input type="text" id="s-descripcion" placeholder="Detalles adicionales del evento" />
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div class="form-group">
-          <label>Fecha y hora del sorteo</label>
-          <input type="datetime-local" id="s-fecha" />
-        </div>
-        <div class="form-group">
-          <label>Precio por boleta ($)</label>
-          <input type="number" id="s-precio" placeholder="5000" min="0" />
-        </div>
-      </div>
+        <!-- ═══════════ MÓDULO: INICIO ═══════════ -->
+        <div class="modulo activo" data-modulo="inicio">
 
-      <div class="form-group">
-        <label>Imagen de premiación (se muestra a los compradores)</label>
-        <input type="file" id="s-imagen" accept="image/jpeg,image/png,image/webp" />
-      </div>
-      <div class="form-group">
-        <label>Descripción del premio</label>
-        <textarea id="s-descripcion-premio" rows="2" placeholder="$20.000.000 en efectivo, carro 0KM, etc."
-          style="width:100%;border:0.5px solid rgba(0,0,0,.12);border-radius:8px;padding:10px 12px;font-size:14px;font-family:inherit"></textarea>
-      </div>
-
-      <div class="form-group">
-        <label>Tipo de juego</label>
-        <select id="s-tipo-boleta" style="width:100%;border:0.5px solid rgba(0,0,0,.12);border-radius:8px;padding:10px 12px;font-size:14px">
-          <option value="bingo">Bingo (cartón 5x5)</option>
-          <option value="rifa">Rifa / Sorteo (boleta numerada)</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Nombre de la modalidad</label>
-        <input type="text" id="s-modalidad-nombre" placeholder="Cartón Bingo" />
-      </div>
-      <div class="form-group">
-        <label>Total de boletas/cartones a vender</label>
-        <input type="number" id="s-total" placeholder="100" min="1" />
-      </div>
-      <div class="form-group" style="display:flex;align-items:center;gap:8px">
-        <input type="checkbox" id="s-permite-elegir" style="width:auto" />
-        <label for="s-permite-elegir" style="margin:0">El comprador puede elegir su número (si no, se asigna al azar)</label>
-      </div>
-
-      <!-- Solo para rifa/sorteo -->
-      <div id="s-rifa-extra" style="display:none">
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-          <div class="form-group">
-            <label>Dígitos por número</label>
-            <input type="number" id="s-rifa-digitos" placeholder="3" min="1" value="3" />
+          <!-- Métricas -->
+          <div class="metrics-grid" id="metricas">
+            <div class="metric-card">
+              <div class="metric-label">Boletas vendidas</div>
+              <div class="metric-value" id="m-boletas">—</div>
+              <div class="metric-sub" id="m-boletas-sub"></div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Dinero recaudado</div>
+              <div class="metric-value" id="m-dinero">—</div>
+              <div class="metric-sub">aprobados</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Compradores</div>
+              <div class="metric-value" id="m-compradores">—</div>
+              <div class="metric-sub">únicos</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Pagos pendientes</div>
+              <div class="metric-value" id="m-pendientes" style="color:#EF9F27">—</div>
+              <div class="metric-sub">por revisar</div>
+            </div>
           </div>
-          <div class="form-group">
-            <label>Números por boleta</label>
-            <input type="number" id="s-rifa-cantidad" placeholder="1" min="1" value="1" />
+
+          <!-- Sorteo activo -->
+          <div class="section-title">Sorteo activo</div>
+          <div class="sorteo-activo" id="sorteo-info">
+            <p style="color:#888;font-size:14px">Cargando...</p>
           </div>
-          <div class="form-group">
-            <label>Modo</label>
-            <select id="s-rifa-modo" style="width:100%;border:0.5px solid rgba(0,0,0,.12);border-radius:8px;padding:10px 12px;font-size:14px">
-              <option value="aleatorio">Aleatorio</option>
-              <option value="secuencial">Secuencial</option>
-            </select>
+
+          <div class="actions-row">
+            <button class="btn-action" id="btn-recargar">↻ Recargar</button>
+            <a href="../../index.html" target="_blank" class="btn-action">👁 Ver página pública</a>
           </div>
         </div>
-        <div class="form-group">
-          <label>¿Cómo se define el ganador?</label>
-          <select id="s-metodo-resultado" style="width:100%;border:0.5px solid rgba(0,0,0,.12);border-radius:8px;padding:10px 12px;font-size:14px">
-            <option value="externo">Resultado externo (ej. últimas cifras Chance/Lotería)</option>
-            <option value="propio">Sorteo propio en vivo</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Detalle del resultado</label>
-          <input type="text" id="s-fuente-resultado" placeholder="Últimas 3 cifras Chance, viernes 9PM" />
-        </div>
-      </div>
 
-      <div style="display:flex;gap:8px">
-        <button class="btn-action success" id="btn-crear-sorteo">Crear evento</button>
-        <button class="btn-action" id="btn-cancelar-form">Cancelar</button>
-      </div>
-    </div>
-
-    <!-- Form editar evento (modal) -->
-    <div class="modal-overlay" id="modal-editar" style="display:none">
-      <div class="modal-box">
-        <button class="modal-close" id="modal-editar-close">✕</button>
-        <h3 style="margin-bottom:12px">Editar evento</h3>
-        <input type="hidden" id="e-id" />
-        <div class="form-group">
-          <label>Nombre del evento</label>
-          <input type="text" id="e-nombre" />
-        </div>
-        <div class="form-group">
-          <label>Descripción corta</label>
-          <input type="text" id="e-descripcion" />
-        </div>
-        <div class="form-group">
-          <label>Fecha y hora del sorteo</label>
-          <input type="datetime-local" id="e-fecha" />
-        </div>
-        <div class="form-group">
-          <label>Descripción del premio</label>
-          <textarea id="e-descripcion-premio" rows="2"
-            style="width:100%;border:0.5px solid rgba(0,0,0,.12);border-radius:8px;padding:10px 12px;font-size:14px;font-family:inherit"></textarea>
-        </div>
-        <div class="form-group">
-          <label>Reemplazar imagen de premiación (opcional)</label>
-          <input type="file" id="e-imagen" accept="image/jpeg,image/png,image/webp" />
-        </div>
-        <div class="form-group">
-          <label>Aumentar total de boletas (modalidad: <span id="e-modalidad-nombre"></span>)</label>
-          <div style="display:flex;gap:8px">
-            <input type="number" id="e-nuevo-total" placeholder="Nuevo total" min="1" />
-            <button class="btn-action" id="btn-aumentar-boletas" style="white-space:nowrap">Generar nuevas</button>
+        <!-- ═══════════ MÓDULO: SORTEOS ═══════════ -->
+        <div class="modulo" data-modulo="sorteos">
+          <div class="actions-row">
+            <button class="btn-action primary" id="btn-toggle-form">＋ Nuevo sorteo</button>
           </div>
-          <div id="e-aumentar-msg" style="font-size:12px;margin-top:4px"></div>
+
+          <!-- Form crear evento (oculto por defecto) -->
+          <div id="form-sorteo">
+            <div class="section-title" style="margin-top:0">Crear nuevo evento (Bingo o Rifa/Sorteo)</div>
+
+            <div class="form-group">
+              <label>Nombre del evento</label>
+              <input type="text" id="s-nombre" placeholder="Gran Bingo de la Fortuna" />
+            </div>
+            <div class="form-group">
+              <label>Descripción corta (opcional)</label>
+              <input type="text" id="s-descripcion" placeholder="Detalles adicionales del evento" />
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div class="form-group">
+                <label>Fecha y hora del sorteo</label>
+                <input type="datetime-local" id="s-fecha" />
+              </div>
+              <div class="form-group">
+                <label>Precio por boleta ($)</label>
+                <input type="number" id="s-precio" placeholder="5000" min="0" />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Imagen de premiación (se muestra a los compradores)</label>
+              <input type="file" id="s-imagen" accept="image/jpeg,image/png,image/webp" />
+            </div>
+            <div class="form-group">
+              <label>Descripción del premio</label>
+              <textarea id="s-descripcion-premio" rows="2" placeholder="$20.000.000 en efectivo, carro 0KM, etc."
+                style="width:100%;border:0.5px solid rgba(0,0,0,.12);border-radius:8px;padding:10px 12px;font-size:14px;font-family:inherit"></textarea>
+            </div>
+
+            <div class="form-group">
+              <label>Tipo de juego</label>
+              <select id="s-tipo-boleta" style="width:100%;border:0.5px solid rgba(0,0,0,.12);border-radius:8px;padding:10px 12px;font-size:14px">
+                <option value="bingo">Bingo (cartón 5x5)</option>
+                <option value="rifa">Rifa / Sorteo (boleta numerada)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Nombre de la modalidad</label>
+              <input type="text" id="s-modalidad-nombre" placeholder="Cartón Bingo" />
+            </div>
+            <div class="form-group">
+              <label>Total de boletas/cartones a vender</label>
+              <input type="number" id="s-total" placeholder="100" min="1" />
+            </div>
+            <div class="form-group" style="display:flex;align-items:center;gap:8px">
+              <input type="checkbox" id="s-permite-elegir" style="width:auto" />
+              <label for="s-permite-elegir" style="margin:0">El comprador puede elegir su número (si no, se asigna al azar)</label>
+            </div>
+
+            <!-- Solo para rifa/sorteo -->
+            <div id="s-rifa-extra" style="display:none">
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+                <div class="form-group">
+                  <label>Dígitos por número</label>
+                  <input type="number" id="s-rifa-digitos" placeholder="3" min="1" value="3" />
+                </div>
+                <div class="form-group">
+                  <label>Números por boleta</label>
+                  <input type="number" id="s-rifa-cantidad" placeholder="1" min="1" value="1" />
+                </div>
+                <div class="form-group">
+                  <label>Modo</label>
+                  <select id="s-rifa-modo" style="width:100%;border:0.5px solid rgba(0,0,0,.12);border-radius:8px;padding:10px 12px;font-size:14px">
+                    <option value="aleatorio">Aleatorio</option>
+                    <option value="secuencial">Secuencial</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>¿Cómo se define el ganador?</label>
+                <select id="s-metodo-resultado" style="width:100%;border:0.5px solid rgba(0,0,0,.12);border-radius:8px;padding:10px 12px;font-size:14px">
+                  <option value="externo">Resultado externo (ej. últimas cifras Chance/Lotería)</option>
+                  <option value="propio">Sorteo propio en vivo</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Detalle del resultado</label>
+                <input type="text" id="s-fuente-resultado" placeholder="Últimas 3 cifras Chance, viernes 9PM" />
+              </div>
+            </div>
+
+            <div style="display:flex;gap:8px">
+              <button class="btn-action success" id="btn-crear-sorteo">Crear evento</button>
+              <button class="btn-action" id="btn-cancelar-form">Cancelar</button>
+            </div>
+          </div>
+
+          <!-- Todos los sorteos -->
+          <div class="section-title">Todos los sorteos</div>
+          <div class="pagos-lista" id="sorteos-lista" style="margin-bottom:16px">
+            <div class="empty-pagos">Cargando sorteos...</div>
+          </div>
         </div>
-        <div class="form-group" style="display:flex;align-items:center;gap:8px">
-          <input type="checkbox" id="e-permite-elegir" style="width:auto" />
-          <label for="e-permite-elegir" style="margin:0">El comprador puede elegir su número</label>
-          <button class="btn-action" id="btn-guardar-elegir" style="margin-left:auto;font-size:11px;padding:5px 10px">Guardar</button>
+
+        <!-- ═══════════ MÓDULO: BOLETAS ═══════════ -->
+        <div class="modulo" data-modulo="boletas">
+
+          <!-- Cartones -->
+          <div class="section-title" style="margin-top:0">Cartones</div>
+          <div class="sorteo-activo" id="cartones-panel" style="margin-bottom:16px">
+            <div class="form-group">
+              <label>Sorteo</label>
+              <select id="cartones-sorteo-select"></select>
+            </div>
+            <div id="cartones-progreso" style="font-size:13px;color:#888;margin-bottom:10px"></div>
+
+            <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:12px">
+              <input type="number" id="cartones-cantidad" placeholder="Cantidad a generar" min="1" />
+              <button class="btn-action success" id="btn-generar-cartones">⚡ Generar</button>
+            </div>
+
+            <label class="upload-zone" for="cartones-pdf-input" style="display:block;margin-bottom:8px">
+              <div class="upload-icon">↑</div>
+              <p>Subir PDF de cartón propio</p>
+              <div class="upload-hint">Se asigna al sorteo seleccionado arriba</div>
+            </label>
+            <input type="file" id="cartones-pdf-input" accept="application/pdf" style="display:none" />
+            <div id="cartones-mensaje" style="font-size:13px;margin-top:6px"></div>
+          </div>
+
+          <!-- Consultar boletas -->
+          <div class="section-title">Consultar boletas</div>
+          <div class="sorteo-activo" id="boletas-panel" style="margin-bottom:16px">
+            <div class="form-group">
+              <label>Evento</label>
+              <select id="boletas-sorteo-select"></select>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:12px">
+              <input type="text" id="boletas-buscar-numero" placeholder="Buscar por número/código" />
+              <input type="text" id="boletas-buscar-telefono" placeholder="Buscar por teléfono" />
+              <button class="btn-action primary" id="btn-buscar-boletas">🔍 Buscar</button>
+            </div>
+            <div id="boletas-resultado" style="max-height:340px;overflow-y:auto"></div>
+          </div>
+
+          <!-- Venta directa (extraer boletas) — panel unificado -->
+          <div class="section-title">Venta directa — extraer boletas</div>
+          <div class="sorteo-activo" style="margin-bottom:16px">
+            <div class="form-group">
+              <label>Evento / modalidad</label>
+              <select id="extraer-sorteo-select"></select>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+              <input type="number" id="extraer-cantidad" placeholder="Cantidad" min="1" />
+              <input type="tel" id="extraer-telefono" placeholder="Teléfono (10 dígitos)" />
+            </div>
+            <input type="text" id="extraer-nombre" placeholder="Nombre (opcional, ej. Administrador)" style="width:100%;margin-bottom:8px" />
+            <div style="display:flex;gap:8px">
+              <button class="btn-action success" id="btn-extraer-boletas" style="flex:1">📤 Extraer boletas</button>
+              <button class="btn-action" id="btn-toggle-extraidas" style="flex:1">📋 Boletas extraídas</button>
+            </div>
+            <div id="extraer-mensaje" style="font-size:12px;margin-top:6px"></div>
+
+            <div id="extraidas-panel" style="display:none;margin-top:14px;border-top:0.5px solid rgba(0,0,0,.08);padding-top:12px">
+              <input type="text" id="extraidas-buscar" placeholder="🔍 Buscar por código, número o teléfono" style="width:100%;margin-bottom:10px" />
+              <div id="extraidas-lista" style="max-height:360px;overflow-y:auto">
+                <div class="empty-pagos">Cargando...</div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <button class="btn-action success" id="btn-guardar-edicion" style="flex:1">Guardar cambios</button>
-          <button class="btn-action" id="btn-cancelar-edicion">Cancelar</button>
+
+        <!-- ═══════════ MÓDULO: PAGOS ═══════════ -->
+        <div class="modulo" data-modulo="pagos">
+          <div class="section-title" style="margin-top:0">Pagos por revisar</div>
+          <div class="pagos-lista" id="pagos-lista">
+            <div class="empty-pagos">Cargando pagos...</div>
+          </div>
         </div>
+
       </div>
     </div>
-
-       <!-- Todos los sorteos -->
-    <div class="section-title">Todos los sorteos</div>
-    <div class="pagos-lista" id="sorteos-lista" style="margin-bottom:16px">
-      <div class="empty-pagos">Cargando sorteos...</div>
-    </div>
-
-    <!-- Cartones -->
-    <div class="section-title">Cartones</div>
-    <div class="sorteo-activo" id="cartones-panel" style="margin-bottom:16px">
-      <div class="form-group">
-        <label>Sorteo</label>
-        <select id="cartones-sorteo-select"></select>
-      </div>
-      <div id="cartones-progreso" style="font-size:13px;color:#888;margin-bottom:10px"></div>
-
-      <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:12px">
-        <input type="number" id="cartones-cantidad" placeholder="Cantidad a generar" min="1" />
-        <button class="btn-action success" id="btn-generar-cartones">⚡ Generar</button>
-      </div>
-
-      <label class="upload-zone" for="cartones-pdf-input" style="display:block;margin-bottom:8px">
-        <div class="upload-icon">↑</div>
-        <p>Subir PDF de cartón propio</p>
-        <div class="upload-hint">Se asigna al sorteo seleccionado arriba</div>
-      </label>
-      <input type="file" id="cartones-pdf-input" accept="application/pdf" style="display:none" />
-      <div id="cartones-mensaje" style="font-size:13px;margin-top:6px"></div>
-    </div>
-
-    <!-- Consultar boletas -->
-    <div class="section-title">Consultar boletas</div>
-    <div class="sorteo-activo" id="boletas-panel" style="margin-bottom:16px">
-      <div class="form-group">
-        <label>Evento</label>
-        <select id="boletas-sorteo-select"></select>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:12px">
-        <input type="text" id="boletas-buscar-numero" placeholder="Buscar por número/código" />
-        <input type="text" id="boletas-buscar-telefono" placeholder="Buscar por teléfono" />
-        <button class="btn-action primary" id="btn-buscar-boletas">🔍 Buscar</button>
-      </div>
-      <div id="boletas-resultado" style="max-height:340px;overflow-y:auto"></div>
-    </div>
-
-    <!-- Venta directa (extraer boletas) — panel unificado -->
-    <div class="section-title">Venta directa — extraer boletas</div>
-    <div class="sorteo-activo" style="margin-bottom:16px">
-      <div class="form-group">
-        <label>Evento / modalidad</label>
-        <select id="extraer-sorteo-select"></select>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-        <input type="number" id="extraer-cantidad" placeholder="Cantidad" min="1" />
-        <input type="tel" id="extraer-telefono" placeholder="Teléfono (10 dígitos)" />
-      </div>
-      <input type="text" id="extraer-nombre" placeholder="Nombre (opcional, ej. Administrador)" style="width:100%;margin-bottom:8px" />
-      <div style="display:flex;gap:8px">
-        <button class="btn-action success" id="btn-extraer-boletas" style="flex:1">📤 Extraer boletas</button>
-        <button class="btn-action" id="btn-toggle-extraidas" style="flex:1">📋 Boletas extraídas</button>
-      </div>
-      <div id="extraer-mensaje" style="font-size:12px;margin-top:6px"></div>
-
-      <div id="extraidas-panel" style="display:none;margin-top:14px;border-top:0.5px solid rgba(0,0,0,.08);padding-top:12px">
-        <input type="text" id="extraidas-buscar" placeholder="🔍 Buscar por código, número o teléfono" style="width:100%;margin-bottom:10px" />
-        <div id="extraidas-lista" style="max-height:360px;overflow-y:auto">
-          <div class="empty-pagos">Cargando...</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Pagos por revisar -->
-    <div class="section-title">Pagos por revisar</div>
-    <div class="pagos-lista" id="pagos-lista">
-      <div class="empty-pagos">Cargando pagos...</div>
-    </div>
-
   </div>
 </div>
 
@@ -430,7 +458,67 @@
   </div>
 </div>
 
+<!-- Form editar evento (modal — queda fuera de los módulos, es global) -->
+<div class="modal-overlay" id="modal-editar" style="display:none">
+  <div class="modal-box">
+    <button class="modal-close" id="modal-editar-close">✕</button>
+    <h3 style="margin-bottom:12px">Editar evento</h3>
+    <input type="hidden" id="e-id" />
+    <div class="form-group">
+      <label>Nombre del evento</label>
+      <input type="text" id="e-nombre" />
+    </div>
+    <div class="form-group">
+      <label>Descripción corta</label>
+      <input type="text" id="e-descripcion" />
+    </div>
+    <div class="form-group">
+      <label>Fecha y hora del sorteo</label>
+      <input type="datetime-local" id="e-fecha" />
+    </div>
+    <div class="form-group">
+      <label>Descripción del premio</label>
+      <textarea id="e-descripcion-premio" rows="2"
+        style="width:100%;border:0.5px solid rgba(0,0,0,.12);border-radius:8px;padding:10px 12px;font-size:14px;font-family:inherit"></textarea>
+    </div>
+    <div class="form-group">
+      <label>Reemplazar imagen de premiación (opcional)</label>
+      <input type="file" id="e-imagen" accept="image/jpeg,image/png,image/webp" />
+    </div>
+    <div class="form-group">
+      <label>Aumentar total de boletas (modalidad: <span id="e-modalidad-nombre"></span>)</label>
+      <div style="display:flex;gap:8px">
+        <input type="number" id="e-nuevo-total" placeholder="Nuevo total" min="1" />
+        <button class="btn-action" id="btn-aumentar-boletas" style="white-space:nowrap">Generar nuevas</button>
+      </div>
+      <div id="e-aumentar-msg" style="font-size:12px;margin-top:4px"></div>
+    </div>
+    <div class="form-group" style="display:flex;align-items:center;gap:8px">
+      <input type="checkbox" id="e-permite-elegir" style="width:auto" />
+      <label for="e-permite-elegir" style="margin:0">El comprador puede elegir su número</label>
+      <button class="btn-action" id="btn-guardar-elegir" style="margin-left:auto;font-size:11px;padding:5px 10px">Guardar</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn-action success" id="btn-guardar-edicion" style="flex:1">Guardar cambios</button>
+      <button class="btn-action" id="btn-cancelar-edicion">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <script src="../js/api.js"></script>
 <script src="../js/admin.js"></script>
+<script>
+  // Navegación de la barra lateral — solo muestra/oculta, no toca admin.js
+  document.querySelectorAll('.nav-item[data-modulo]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const modulo = btn.dataset.modulo;
+      document.querySelectorAll('.nav-item[data-modulo]').forEach(b => b.classList.remove('activo'));
+      btn.classList.add('activo');
+      document.querySelectorAll('.modulo[data-modulo]').forEach(m => {
+        m.classList.toggle('activo', m.dataset.modulo === modulo);
+      });
+    });
+  });
+</script>
 </body>
 </html>
