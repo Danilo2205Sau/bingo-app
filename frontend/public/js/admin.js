@@ -86,6 +86,8 @@ function inicializarEventos() {
   // Consultar boletas
   document.getElementById('btn-buscar-boletas').addEventListener('click', buscarBoletas);
   document.getElementById('boletas-sorteo-select').addEventListener('change', buscarBoletas);
+
+  document.getElementById('btn-extraer-boletas').addEventListener('click', extraerBoletas);
 }
 
 async function hacerLogin() {
@@ -121,7 +123,87 @@ function entrarAlPanel(nombre) {
 }
 
 async function cargarDatos() {
-  await Promise.all([cargarMetricas(), cargarPendientes(), cargarEventos()]);
+  await Promise.all([cargarMetricas(), cargarPendientes(), cargarEventos(), cargarBoletasExtraidas()]);
+}
+
+function poblarSelectExtraer() {
+  const select = document.getElementById('extraer-sorteo-select');
+  if (!select) return;
+  if (!todosLosEventos.length) {
+    select.innerHTML = '<option value="">No hay eventos creados aún</option>';
+    return;
+  }
+  select.innerHTML = todosLosEventos.map(s => {
+    const mod = (s.modalidades && s.modalidades[0]) || {};
+    const disponibles = (mod.total_boletas || 0) - (mod.boletas_vendidas || 0);
+    return `<option value="${mod.id || ''}" data-sorteo-id="${s.id}">${s.nombre} — ${mod.nombre || ''} (${disponibles} disp.)</option>`;
+  }).join('');
+}
+
+async function extraerBoletas() {
+  const select = document.getElementById('extraer-sorteo-select');
+  const modalidadId = select.value;
+  const sorteoId = select.selectedOptions[0]?.dataset.sorteoId;
+  const cantidad = parseInt(document.getElementById('extraer-cantidad').value);
+  const telefono = document.getElementById('extraer-telefono').value.trim();
+  const nombre = document.getElementById('extraer-nombre').value.trim();
+  const msgEl = document.getElementById('extraer-mensaje');
+
+  if (!modalidadId || !sorteoId) return mostrarToast('Selecciona un evento', 'error');
+  if (!cantidad || cantidad < 1) return mostrarToast('Ingresa una cantidad válida', 'error');
+  if (!telefono || telefono.length < 10) return mostrarToast('Ingresa un teléfono válido (10 dígitos)', 'error');
+
+  const btn = document.getElementById('btn-extraer-boletas');
+  btn.disabled = true;
+  btn.textContent = 'Extrayendo...';
+  msgEl.textContent = '';
+
+  try {
+    const data = await Api.extraerBoletas({ sorteo_id: sorteoId, modalidad_id: modalidadId, cantidad, telefono, nombre }, tokenAdmin);
+    msgEl.style.color = '#085041';
+    msgEl.textContent = `✓ ${data.message}`;
+    document.getElementById('extraer-cantidad').value = '';
+    document.getElementById('extraer-telefono').value = '';
+    document.getElementById('extraer-nombre').value = '';
+    cargarDatos();
+  } catch (err) {
+    msgEl.style.color = '#712B13';
+    msgEl.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📤 Extraer boletas';
+  }
+}
+
+async function cargarBoletasExtraidas() {
+  const lista = document.getElementById('extraidas-lista');
+  if (!lista) return;
+  try {
+    const ventas = await Api.getBoletasExtraidas(tokenAdmin);
+    if (!ventas.length) {
+      lista.innerHTML = '<div class="empty-pagos">Aún no has extraído boletas</div>';
+      return;
+    }
+    lista.innerHTML = ventas.map(v => `
+      <div class="pago-item">
+        <div class="avatar">${iniciales(v.comprador_nombre || 'AD')}</div>
+        <div class="pago-meta">
+          <strong>${v.comprador_nombre}</strong>
+          <span>${v.cantidad} boleta(s) · ${v.sorteo_nombre} · ${tiempoRelativo(v.creado_en)}</span>
+          <span style="display:block;color:#3C3489;font-weight:500">${formatCOP(v.total_pagado)} · ${v.comprador_telefono}</span>
+        </div>
+        <div class="pago-acciones">
+          <span class="badge ${badgeClaseEstado(v.estado_pago === 'aprobado' ? 'activo' : v.estado_pago === 'rechazado' ? 'cerrado' : 'borrador')}">${v.estado_pago}</span>
+          ${v.estado_pago === 'pendiente' ? `
+            <button class="btn-aprobar" onclick="aprobarVenta('${v.id}')">✓</button>
+            <button class="btn-rechazar" onclick="rechazarVenta('${v.id}','')">✕</button>
+          ` : ''}
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    lista.innerHTML = `<div class="empty-pagos" style="color:#D85A30">${err.message}</div>`;
+  }
 }
 
 // ── Gestión de eventos ──────────────────────────────────────────
@@ -158,6 +240,7 @@ async function cargarEventos() {
 
     poblarSelectCartones();
     poblarSelectBoletas();
+    poblarSelectExtraer();
   } catch (err) {
     lista.innerHTML = `<div class="empty-pagos" style="color:#D85A30">Error cargando eventos: ${err.message}</div>`;
   }

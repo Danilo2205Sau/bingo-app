@@ -114,6 +114,26 @@ const Api = {
     return data;
   },
 
+    async extraerBoletas(datos, token) {
+    const res = await fetch(`${API_URL}/admin/extraer-boletas`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(datos),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al extraer boletas');
+    return data;
+  },
+
+  async getBoletasExtraidas(token) {
+    const res = await fetch(`${API_URL}/admin/boletas-extraidas`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al cargar boletas extraídas');
+    return data;
+  },
+
   async getBoletasEvento(sorteoId, filtros, token) {
     const params = new URLSearchParams();
     if (filtros?.numero)   params.set('numero', filtros.numero);

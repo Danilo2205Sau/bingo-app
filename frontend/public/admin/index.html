@@ -376,6 +376,27 @@
       <div id="boletas-resultado" style="max-height:340px;overflow-y:auto"></div>
     </div>
 
+    <!-- Venta directa (extraer boletas) -->
+    <div class="section-title">Venta directa — extraer boletas</div>
+    <div class="sorteo-activo" style="margin-bottom:16px">
+      <div class="form-group">
+        <label>Evento / modalidad</label>
+        <select id="extraer-sorteo-select"></select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <input type="number" id="extraer-cantidad" placeholder="Cantidad" min="1" />
+        <input type="tel" id="extraer-telefono" placeholder="Teléfono (10 dígitos)" />
+      </div>
+      <input type="text" id="extraer-nombre" placeholder="Nombre (opcional, ej. Administrador)" style="width:100%;margin-bottom:8px" />
+      <button class="btn-action success" id="btn-extraer-boletas">📤 Extraer boletas</button>
+      <div id="extraer-mensaje" style="font-size:12px;margin-top:6px"></div>
+    </div>
+
+    <div class="section-title">Boletas extraídas (venta directa)</div>
+    <div class="pagos-lista" id="extraidas-lista" style="margin-bottom:16px">
+      <div class="empty-pagos">Cargando...</div>
+    </div>
+
     <!-- Pagos por revisar -->
     <div class="section-title">Pagos por revisar</div>
     <div class="pagos-lista" id="pagos-lista">
