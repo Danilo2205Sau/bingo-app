@@ -70,7 +70,8 @@ router.get('/ventas-pendientes', auth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/admin/extraer-boletas — el admin reserva N boletas para vender
+// POST /api/admin/extraer-boletas
+//  — el admin reserva N boletas para vender
 // aparte (en persona, etc). Quedan en estado 'pendiente' hasta que las apruebe
 // cuando le paguen — reutiliza exactamente el mismo flujo de aprobar/rechazar.
 router.post('/extraer-boletas', auth, async (req, res, next) => {
@@ -84,7 +85,7 @@ router.post('/extraer-boletas', auth, async (req, res, next) => {
       return res.status(400).json({ error: 'Cantidad inválida' });
 
     const { rows: modRows } = await db.query(
-      'SELECT id, precio_boleta, total_boletas, boletas_vendidas FROM modalidades WHERE id = $1 AND sorteo_id = $2',
+      'SELECT id, precio_boleta, total_boletas, boletas_vendidas, tipo_boleta, fuente_resultado FROM modalidades WHERE id = $1 AND sorteo_id = $2',
       [modalidad_id, sorteo_id]
     );
     if (!modRows.length) return res.status(404).json({ error: 'Modalidad no encontrada' });
@@ -123,7 +124,7 @@ router.post('/extraer-boletas', auth, async (req, res, next) => {
           break;
         }
         await client.query('COMMIT');
-        creadas.push({ venta_id: venta[0].id, codigo_unico: asignados[0].codigo_unico, numeros: asignados[0].numeros });
+        creadas.push({ venta_id: venta[0].id, carton_id: asignados[0].id, codigo_unico: asignados[0].codigo_unico, numeros: asignados[0].numeros });
       }
     } finally {
       client.release();
@@ -133,9 +134,60 @@ router.post('/extraer-boletas', auth, async (req, res, next) => {
       return res.status(409).json({ error: 'No se pudo reservar ninguna boleta (sin disponibilidad)' });
 
     res.status(201).json({
-      message: `${creadas.length} boleta(s) reservada(s) — pendiente por cobrar`,
+      message: `${creadas.length} boleta(s) reservada(s) — enviando por WhatsApp...`,
       cartones: creadas,
     });
+
+    // Generar el PDF y enviar cada boleta por WhatsApp de forma individual,
+    // sin bloquear la respuesta al admin. No marca como pagado — eso pasa
+    // aparte cuando el admin apruebe cada venta al recibir el pago.
+    (async () => {
+      const { rows: sorteoRows } = await db.query(
+        'SELECT nombre, fecha_sorteo, imagen_premio_url FROM sorteos WHERE id = $1', [sorteo_id]
+      );
+      const sorteoInfo = sorteoRows[0] || {};
+      const fechaSorteoTexto = sorteoInfo.fecha_sorteo
+        ? new Date(sorteoInfo.fecha_sorteo).toLocaleDateString('es-CO', { dateStyle: 'long' })
+        : '';
+      const whatsappContacto = process.env.WHATSAPP_CONTACTO_PUBLICO || '';
+      const { generarHojaCartonesPDF, generarBoletasConImagenPremio } = require('../services/pdfGenerator');
+      const { enviarCartonesPorWhatsApp } = require('../services/whatsapp');
+
+      for (const item of creadas) {
+        try {
+          let pdfUrl;
+          if (sorteoInfo.imagen_premio_url) {
+            ({ pdfUrl } = await generarBoletasConImagenPremio({
+              cartones: [{ codigo_unico: item.codigo_unico, numeros: item.numeros }],
+              imagenPremioUrl: sorteoInfo.imagen_premio_url,
+              sorteoNombre: sorteoInfo.nombre,
+              fechaSorteoTexto,
+              precioBoleta: modalidad.precio_boleta,
+              whatsappContacto,
+              fuenteResultado: modalidad.fuente_resultado,
+              ventaId: item.venta_id,
+            }));
+          } else {
+            ({ pdfUrl } = await generarHojaCartonesPDF({
+              cartones: [{ codigo_unico: item.codigo_unico, numeros: item.numeros }],
+              tipoBoleta: modalidad.tipo_boleta || 'bingo',
+              fuenteResultado: modalidad.fuente_resultado,
+              sorteoNombre: sorteoInfo.nombre,
+              fechaSorteoTexto,
+              ventaId: item.venta_id,
+              whatsappContacto,
+            }));
+          }
+          await db.query('UPDATE cartones SET pdf_url = $1 WHERE id = $2', [pdfUrl, item.carton_id]);
+          await enviarCartonesPorWhatsApp(item.venta_id);
+          console.log(`[Extracción] Boleta ${item.codigo_unico} enviada por WhatsApp`);
+        } catch (err) {
+          console.error(`[Extracción] Error enviando boleta ${item.codigo_unico}:`, err.message);
+        }
+        // Pausa breve entre boletas para no saturar el envío
+        await new Promise(r => setTimeout(r, 1500));
+      }
+    })();
   } catch (err) { next(err); }
 });
 
@@ -200,7 +252,13 @@ router.patch('/ventas/:id/aprobar', auth, async (req, res, next) => {
       await client.query('UPDATE cartones SET vendido = true WHERE id = $1', [carton.id]);
     }
 
-    await client.query('COMMIT');
+      await client.query('COMMIT');
+
+    // Si es una boleta de venta directa (extraída por el admin), el PDF y el
+    // WhatsApp ya se enviaron al momento de extraerla — aquí solo se confirma el pago.
+    if (venta.es_administrador) {
+      return res.json({ message: 'Pago confirmado', venta_id: venta.id });
+    }
 
     // 4. Generar el PDF de las boletas (con imagen de premiación si el evento tiene una,
     //    o la hoja clásica de respaldo si no) y disparar el envío de WhatsApp
