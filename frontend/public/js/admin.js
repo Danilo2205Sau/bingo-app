@@ -905,15 +905,30 @@ function tiempoRelativo(iso) {
 
 function mostrarToast(msg, tipo = 'success') {
   document.getElementById('toast-admin')?.remove();
-  const colores = { success:'#085041', error:'#712B13', warning:'#633806' };
+  const estilos = {
+    success: { grad: 'linear-gradient(135deg,#22C97A,#17A567)', icon: '✓' },
+    error:   { grad: 'linear-gradient(135deg,#EF4C54,#C4303A)', icon: '✕' },
+    warning: { grad: 'linear-gradient(135deg,#F5A623,#C97D0A)', icon: '⚠' },
+  };
+  const e = estilos[tipo] || estilos.success;
   const t = document.createElement('div');
   t.id = 'toast-admin';
   t.style.cssText = `
     position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
-    background:${colores[tipo]};color:#fff;padding:12px 20px;
-    border-radius:10px;font-size:14px;z-index:200;
-    box-shadow:0 4px 16px rgba(0,0,0,.3);max-width:90vw;text-align:center`;
-  t.textContent = msg;
+    background:${e.grad};color:#fff;padding:14px 22px;
+    border-radius:14px;font-size:14px;font-weight:500;z-index:200;
+    box-shadow:0 8px 28px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.08) inset;
+    max-width:90vw;text-align:center;display:flex;align-items:center;gap:10px;
+    animation:toastIn .25s ease-out`;
+  t.innerHTML = `<span style="font-size:16px">${e.icon}</span><span>${msg}</span>`;
   document.body.appendChild(t);
+
+  if (!document.getElementById('toast-anim-style')) {
+    const style = document.createElement('style');
+    style.id = 'toast-anim-style';
+    style.textContent = `@keyframes toastIn { from { opacity:0; transform:translate(-50%,10px); } to { opacity:1; transform:translate(-50%,0); } }`;
+    document.head.appendChild(style);
+  }
+
   setTimeout(() => t.remove(), 4000);
 }

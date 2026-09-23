@@ -1,0 +1,210 @@
+/* ============================================
+   admin-theme.css — Rediseño visual del panel admin
+   (fondo oscuro, degradados, tarjetas con brillo)
+   Se carga DESPUÉS de main.css, así que sobrescribe
+   los colores sin tocar el archivo original.
+   ============================================ */
+
+:root {
+  --bg-deep:      #0A0E27;
+  --bg-panel:     #12173A;
+  --bg-card:      #171C42;
+  --borde-sutil:  rgba(255,255,255,0.08);
+  --morado:       #7C5CFF;
+  --morado-osc:   #5B3FE0;
+  --azul:         #3B82F6;
+  --verde:        #22C97A;
+  --naranja:      #F5A623;
+  --rojo:         #EF4C54;
+  --dorado:       #FFD558;
+  --texto:        #E8E9F3;
+  --texto-sec:    #9497B8;
+}
+
+html, body {
+  background: var(--bg-deep) !important;
+  color: var(--texto);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(124,92,255,0.18) 0%, transparent 40%),
+    radial-gradient(circle at 90% 20%, rgba(59,130,246,0.14) 0%, transparent 35%),
+    radial-gradient(circle at 50% 100%, rgba(124,92,255,0.10) 0%, transparent 45%);
+}
+
+#pantalla-login, #pantalla-dashboard { position: relative; z-index: 1; }
+
+/* ── Tarjetas generales ─────────────────────────────────────── */
+.card, .sorteo-activo, .sorteo-item, .pago-item, #boletas-panel,
+.pagos-lista, .modal-box {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--borde-sutil) !important;
+  border-radius: 16px !important;
+  color: var(--texto) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+}
+
+.card-inner, .pago-info {
+  background: var(--bg-panel) !important;
+  border: 1px solid var(--borde-sutil) !important;
+  border-radius: 12px !important;
+}
+
+.section-title {
+  color: var(--texto-sec) !important;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Textos secundarios dentro de tarjetas oscuras */
+.card p, .card span, .sorteo-item span, .pago-meta span,
+label, .empty-pagos {
+  color: var(--texto-sec);
+}
+.card strong, .sorteo-item strong, .pago-meta strong, h1, h2, h3 {
+  color: var(--texto) !important;
+}
+
+/* ── Botones ─────────────────────────────────────────────────── */
+.btn-action, .cta-btn, button {
+  border-radius: 10px !important;
+  border: 1px solid var(--borde-sutil) !important;
+  background: var(--bg-panel) !important;
+  color: var(--texto) !important;
+  transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+}
+.btn-action:hover, .cta-btn:hover, button:hover {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+
+.btn-action.primary, .cta-btn, #btn-toggle-form, #btn-generar-cartones.primary {
+  background: linear-gradient(135deg, var(--morado), var(--morado-osc)) !important;
+  border: none !important;
+  color: #fff !important;
+  box-shadow: 0 4px 16px rgba(124,92,255,0.4);
+}
+
+.btn-action.success, #btn-crear-sorteo, #btn-guardar-edicion,
+#btn-extraer-boletas, #btn-generar-cartones {
+  background: linear-gradient(135deg, var(--verde), #17A567) !important;
+  border: none !important;
+  color: #fff !important;
+  box-shadow: 0 4px 16px rgba(34,201,122,0.35);
+}
+
+.btn-aprobar {
+  background: linear-gradient(135deg, var(--verde), #17A567) !important;
+  border: none !important; color: #fff !important; border-radius: 8px !important;
+}
+.btn-rechazar, .btn-eliminar-evento {
+  background: transparent !important;
+  border: 1px solid var(--rojo) !important;
+  color: var(--rojo) !important;
+  border-radius: 8px !important;
+}
+.btn-rechazar:hover, .btn-eliminar-evento:hover {
+  background: rgba(239,76,84,0.12) !important;
+}
+
+/* ── Badges / estados ────────────────────────────────────────── */
+.badge {
+  border-radius: 999px !important;
+  padding: 4px 12px !important;
+  font-weight: 600 !important;
+  font-size: 11px !important;
+  border: 1px solid transparent !important;
+}
+.badge-approved {
+  background: rgba(34,201,122,0.15) !important;
+  color: #4EE39B !important;
+  border-color: rgba(34,201,122,0.35) !important;
+}
+.badge-borrador {
+  background: rgba(148,151,184,0.15) !important;
+  color: #C4C6E0 !important;
+  border-color: rgba(148,151,184,0.3) !important;
+}
+.badge-cerrado {
+  background: rgba(245,166,35,0.15) !important;
+  color: #FFC761 !important;
+  border-color: rgba(245,166,35,0.35) !important;
+}
+.badge-finalizado {
+  background: rgba(59,130,246,0.15) !important;
+  color: #8FB6FF !important;
+  border-color: rgba(59,130,246,0.35) !important;
+}
+
+/* ── Barra de progreso ───────────────────────────────────────── */
+.progress-wrap {
+  background: var(--bg-panel) !important;
+  border-radius: 999px !important;
+  overflow: hidden;
+  height: 8px;
+}
+.progress-bar {
+  background: linear-gradient(90deg, var(--morado), var(--azul)) !important;
+  box-shadow: 0 0 12px rgba(124,92,255,0.6);
+}
+.progress-meta { color: var(--texto-sec) !important; }
+
+/* ── Formularios ─────────────────────────────────────────────── */
+input, select, textarea {
+  background: var(--bg-panel) !important;
+  border: 1px solid var(--borde-sutil) !important;
+  color: var(--texto) !important;
+  border-radius: 10px !important;
+}
+input::placeholder, textarea::placeholder { color: var(--texto-sec) !important; }
+input:focus, select:focus, textarea:focus {
+  outline: none !important;
+  border-color: var(--morado) !important;
+  box-shadow: 0 0 0 3px rgba(124,92,255,0.25) !important;
+}
+
+/* Cuadrícula de cantidad / números (qty-btn) */
+.qty-btn {
+  background: var(--bg-panel) !important;
+  border: 1px solid var(--borde-sutil) !important;
+  color: var(--texto) !important;
+  border-radius: 10px !important;
+}
+.qty-btn.active {
+  background: linear-gradient(135deg, var(--morado), var(--morado-osc)) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  box-shadow: 0 0 16px rgba(124,92,255,0.5);
+}
+
+/* ── Avatar / iniciales ──────────────────────────────────────── */
+.avatar {
+  background: linear-gradient(135deg, var(--morado), var(--azul)) !important;
+  color: #fff !important;
+}
+
+/* ── Filas de boletas ────────────────────────────────────────── */
+.boleta-row { border-bottom: 1px solid var(--borde-sutil) !important; }
+.boleta-row .num { color: #B9A9FF !important; }
+.boleta-row .vendido { color: #4EE39B !important; }
+.boleta-row .libre { color: var(--texto-sec) !important; }
+
+/* ── Modal ───────────────────────────────────────────────────── */
+.modal-overlay {
+  background: rgba(5,7,20,0.75) !important;
+  backdrop-filter: blur(4px);
+}
+.modal-close {
+  color: var(--texto-sec) !important;
+}
+
+/* ── Scrollbar más discreto ──────────────────────────────────── */
+* { scrollbar-width: thin; scrollbar-color: var(--morado-osc) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--morado-osc); border-radius: 8px; }
