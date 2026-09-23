@@ -62,8 +62,74 @@ router.get('/ventas-pendientes', auth, async (req, res, next) => {
       FROM ventas v
       JOIN compradores c ON c.id = v.comprador_id
       JOIN sorteos s     ON s.id = v.sorteo_id
-      WHERE v.estado_pago IN ('pendiente','en_revision')
+      WHERE v.estado_pago IN ('pendiente','en_revision') AND v.es_administrador = false
       ORDER BY v.creado_en ASC
+    `);
+    res.json(rows);
+  } catch (err) { next(err); }
+});
+
+// POST /api/admin/extraer-boletas — el admin reserva N boletas para vender
+// aparte (en persona, etc). Quedan en estado 'pendiente' hasta que las apruebe
+// cuando le paguen — reutiliza exactamente el mismo flujo de aprobar/rechazar.
+router.post('/extraer-boletas', auth, async (req, res, next) => {
+  try {
+    const { sorteo_id, modalidad_id, cantidad, telefono, nombre } = req.body;
+    if (!sorteo_id || !modalidad_id || !cantidad || !telefono)
+      return res.status(400).json({ error: 'sorteo_id, modalidad_id, cantidad y telefono son requeridos' });
+
+    const cant = parseInt(cantidad);
+    if (!Number.isInteger(cant) || cant < 1)
+      return res.status(400).json({ error: 'Cantidad inválida' });
+
+    const { rows: modRows } = await db.query(
+      'SELECT id, precio_boleta, total_boletas, boletas_vendidas FROM modalidades WHERE id = $1 AND sorteo_id = $2',
+      [modalidad_id, sorteo_id]
+    );
+    if (!modRows.length) return res.status(404).json({ error: 'Modalidad no encontrada' });
+    const modalidad = modRows[0];
+
+    const disponibles = modalidad.total_boletas - modalidad.boletas_vendidas;
+    if (cant > disponibles)
+      return res.status(409).json({ error: `Solo quedan ${disponibles} boleta(s) disponibles en esta modalidad` });
+
+    const total = parseFloat(modalidad.precio_boleta) * cant;
+
+    const { rows: comp } = await db.query(`
+      INSERT INTO compradores (nombre, telefono)
+      VALUES ($1, $2)
+      ON CONFLICT (telefono) DO UPDATE SET nombre = EXCLUDED.nombre
+      RETURNING id
+    `, [(nombre || 'Administrador').trim(), telefono.trim()]);
+
+    const { rows: venta } = await db.query(`
+      INSERT INTO ventas
+        (comprador_id, sorteo_id, modalidad_id, cantidad, total_pagado, metodo_pago, estado_pago, es_administrador)
+      VALUES ($1,$2,$3,$4,$5,'fisico','pendiente', true)
+      RETURNING id, estado_pago, creado_en
+    `, [comp[0].id, sorteo_id, modalidad_id, cant, total]);
+
+    res.status(201).json({
+      message: `${cant} boleta(s) reservada(s) — pendiente por cobrar`,
+      venta_id: venta[0].id,
+      total_pagado: total,
+    });
+  } catch (err) { next(err); }
+});
+
+// GET /api/admin/boletas-extraidas — las ventas directas del admin, con su estado
+router.get('/boletas-extraidas', auth, async (req, res, next) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT v.id, v.cantidad, v.total_pagado, v.estado_pago, v.creado_en,
+             c.nombre AS comprador_nombre, c.telefono AS comprador_telefono,
+             s.nombre AS sorteo_nombre, m.nombre AS modalidad_nombre
+      FROM ventas v
+      JOIN compradores c ON c.id = v.comprador_id
+      JOIN sorteos s ON s.id = v.sorteo_id
+      LEFT JOIN modalidades m ON m.id = v.modalidad_id
+      WHERE v.es_administrador = true
+      ORDER BY v.creado_en DESC
     `);
     res.json(rows);
   } catch (err) { next(err); }

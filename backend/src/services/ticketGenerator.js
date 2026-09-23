@@ -5,9 +5,12 @@
 
 function generarBoleta(modalidad, indiceSecuencial = 0) {
   if (modalidad.tipo_boleta === 'rifa') {
-    return { numeros: generarNumerosRifa(modalidad.config || {}, indiceSecuencial) };
+    const numeros = generarNumerosRifa(modalidad.config || {}, indiceSecuencial);
+    // El código interno = el mismo número de la boleta (búsqueda unificada)
+    const codigoSugerido = numeros.length === 1 ? numeros[0] : numeros.join('');
+    return { numeros, codigoSugerido };
   }
-  return { numeros: generarMatrizBingo() };
+  return { numeros: generarMatrizBingo(), codigoSugerido: null };
 }
 
 // ── Bingo clásico: B(1-15) I(16-30) N(31-45) G(46-60) O(61-75), centro libre ──

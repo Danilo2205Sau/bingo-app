@@ -39,17 +39,30 @@ router.post('/generar', auth, async (req, res, next) => {
 
     const generados = [];
 
-    for (let i = 0; i < cant; i++) {
-      const codigo = generarCodigo();
-      const { numeros } = generarBoleta(modalidad, yaGenerados + i);
+        for (let i = 0; i < cant; i++) {
+      let insertado = null;
+      let intentos = 0;
 
-      const { rows } = await db.query(`
-        INSERT INTO cartones (sorteo_id, modalidad_id, tipo_boleta, codigo_unico, numeros, pdf_url, tipo)
-        VALUES ($1,$2,$3,$4,$5,NULL,'generado')
-        RETURNING id, codigo_unico
-      `, [modalidad.sorteo_id, modalidad_id, modalidad.tipo_boleta, codigo, JSON.stringify(numeros)]);
+      // Reintenta si el código (= número, en rifa) ya existe — evita choques
+      while (!insertado && intentos < 20) {
+        intentos++;
+        const { numeros, codigoSugerido } = generarBoleta(modalidad, yaGenerados + i);
+        const codigo = codigoSugerido || generarCodigo();
 
-      generados.push(rows[0]);
+        const { rows } = await db.query(`
+          INSERT INTO cartones (sorteo_id, modalidad_id, tipo_boleta, codigo_unico, numeros, pdf_url, tipo)
+          VALUES ($1,$2,$3,$4,$5,NULL,'generado')
+          ON CONFLICT (codigo_unico) DO NOTHING
+          RETURNING id, codigo_unico
+        `, [modalidad.sorteo_id, modalidad_id, modalidad.tipo_boleta, codigo, JSON.stringify(numeros)]);
+
+        if (rows.length) insertado = rows[0];
+      }
+
+      if (!insertado) {
+        return res.status(500).json({ error: `No se pudo generar un código único para la boleta ${i + 1} tras 20 intentos. Prueba con más dígitos en la configuración de la rifa.` });
+      }
+      generados.push(insertado);
     }
 
     res.status(201).json({ message: `${cant} boleta(s) generada(s)`, cartones: generados });
