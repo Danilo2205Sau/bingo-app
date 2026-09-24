@@ -199,11 +199,61 @@
     .modulo.activo { display:block }
     .admin-container { max-width:1100px; margin:0 auto; padding:24px }
 
-    #boletas-sorteo-select { grid-column:1 / -1 }
-  </style>
+    /* ── Fondo: emblema grande como marca de agua ──────────── */
+    .bg-emblema {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      display: flex; align-items: center; justify-content: center;
+      opacity: .07;
+    }
+    .bg-emblema svg { width: min(70vw, 620px); height: auto; animation: emblema-respirar 6s ease-in-out infinite; }
+    @keyframes emblema-respirar { 0%,100% { opacity:.8; transform:scale(1) } 50% { opacity:1; transform:scale(1.03) } }
+
+    /* ── Refuerzo de responsividad móvil ───────────────────── */
+    html, body { overflow-x: hidden; max-width: 100vw; }
+    @media (max-width: 640px) {
+      .admin-container { padding: 14px !important; }
+      .metrics-grid { gap: 10px !important; }
+      .metric-card { padding: 14px !important; border-radius: 14px !important; }
+      .metric-icon { width:30px !important; height:30px !important; font-size:12px !important; top:14px !important; right:14px !important }
+      .metric-label { font-size:9.5px !important; }
+      .metric-value { font-size:22px !important; }
+      .metric-sub { font-size:9.5px !important; }
+
+      header.h-20 { height:64px !important; padding:0 12px !important }
+      h2.font-cinzel { font-size:14px !important }
+
+      .sorteo-activo, .card, #cartones-panel, #boletas-panel { padding:14px !important }
+      .section-title { font-size:11px !important; margin:16px 0 8px !important }
+
+      #sorteo-info strong { font-size:16px !important }
+      .progress-meta { flex-direction:column; align-items:flex-start !important; gap:2px }
+
+      .btn-action, .cta-btn { font-size:12px !important; padding:9px 12px !important }
+      .modal-box { padding:16px !important; border-radius:14px !important }
+
+      .pago-item { flex-wrap: wrap; gap:8px !important }
+      .pago-acciones { width:100%; justify-content:flex-end }
+
+      form input, form select, form textarea, .form-group input, .form-group select { font-size:14px !important }
+    }
+
+    @media (max-width: 400px) {
+      .metrics-grid { grid-template-columns: 1fr !important; }
+    }
 </head>
 <body class="bg-obsidian-900 bg-pattern min-h-screen text-slate-200 antialiased selection:bg-gold-500 selection:text-black">
 
+  <div class="bg-emblema">
+    <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M20 35L35 52L50 20L65 52L80 35L88 75H12L20 35Z" stroke="url(#goldGradBg)" stroke-width="2.5" stroke-linejoin="round" fill="none"/>
+      <path d="M50 48C45 42 38 48 44 54C38 60 45 66 50 60C55 66 62 60 56 54C62 48 55 42 50 48Z" fill="none" stroke="#00FF9D" stroke-width="1.2"/>
+      <defs>
+        <linearGradient id="goldGradBg" x1="0" y1="0" x2="100" y2="100">
+          <stop offset="0%" stop-color="#FFF0B3"/><stop offset="50%" stop-color="#00FF9D"/><stop offset="100%" stop-color="#D4AF37"/>
+        </linearGradient>
+      </defs>
+    </svg>
+  </div>
   <canvas id="bgCanvas" class="fixed inset-0 pointer-events-none z-0 opacity-40"></canvas>
 
   <!-- ── PANTALLA LOGIN ──────────────────────────────────── -->
@@ -238,10 +288,24 @@
         <div>
           <div class="p-6 flex flex-col items-center justify-center border-b border-gold-500/15">
             <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-obsidian-700 to-obsidian-900 border border-gold-500/40 flex items-center justify-center shadow-[0_0_25px_rgba(212,175,55,0.25)]">
-              <i class="fa-solid fa-crown text-gold-400 text-3xl animate-gold-pulse"></i>
+              <svg class="w-12 h-12 animate-gold-pulse" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M20 35L35 52L50 20L65 52L80 35L88 75H12L20 35Z" stroke="url(#goldGrad2)" stroke-width="3.5" stroke-linejoin="round" fill="rgba(212,175,55,0.08)"/>
+                <path d="M50 48C45 42 38 48 44 54C38 60 45 66 50 60C55 66 62 60 56 54C62 48 55 42 50 48Z" fill="url(#emeraldGrad2)" stroke="#00FF9D" stroke-width="1.5"/>
+                <circle cx="50" cy="54" r="3" fill="#FFF"/>
+                <circle cx="20" cy="35" r="3" fill="#00FF9D"/>
+                <circle cx="50" cy="20" r="4" fill="#FFF6D6"/>
+                <circle cx="80" cy="35" r="3" fill="#00FF9D"/>
+                <defs>
+                  <linearGradient id="goldGrad2" x1="0" y1="0" x2="100" y2="100">
+                    <stop offset="0%" stop-color="#FFF0B3"/><stop offset="50%" stop-color="#D4AF37"/><stop offset="100%" stop-color="#8A6708"/>
+                  </linearGradient>
+                  <linearGradient id="emeraldGrad2" x1="0" y1="0" x2="100" y2="100">
+                    <stop offset="0%" stop-color="#00FF9D"/><stop offset="100%" stop-color="#006633"/>
+                  </linearGradient>
+                </defs>
+              </svg>
             </div>
-            <h1 class="mt-4 font-cinzel text-lg font-bold tracking-wider text-gold-bright text-center">SORTEOS EL GANADOR</h1>
-            <span class="text-[10px] tracking-[0.2em] font-semibold text-emeraldGlow uppercase bg-emeraldGlow/10 px-3 py-0.5 rounded-full border border-emeraldGlow/30 mt-1">Co.</span>
+            <span class="text-xs tracking-[0.3em] font-bold text-emeraldGlow uppercase mt-2">Admin</span>
           </div>
 
           <nav class="p-4 space-y-1">
@@ -249,21 +313,12 @@
             <button class="nav-item" data-modulo="sorteos"><i class="fa-solid fa-bullseye"></i> Sorteos</button>
             <button class="nav-item" data-modulo="boletas"><i class="fa-solid fa-ticket"></i> Boletas</button>
             <button class="nav-item" data-modulo="pagos"><i class="fa-solid fa-credit-card"></i> Pagos</button>
-            <button class="nav-item proximamente" title="Próximamente"><i class="fa-solid fa-users"></i> Compradores</button>
             <button class="nav-item proximamente" title="Próximamente"><i class="fa-solid fa-chart-pie"></i> Reportes</button>
             <button class="nav-item proximamente" title="Próximamente"><i class="fa-solid fa-gear"></i> Configuración</button>
           </nav>
         </div>
 
         <div class="p-4 border-t border-gold-500/15">
-          <div class="sidebar-footer-box">
-            <span class="glow"></span>
-            <i class="fa-solid fa-crown text-gold-400 text-xl mb-1"></i>
-            <p class="text-xs font-bold text-gold-gradient tracking-wide uppercase">Grandes Sueños</p>
-            <p class="text-[10px] text-slate-400">También se juegan</p>
-            <p class="text-[9px] text-gold-500/70 font-mono mt-1">Sorteos El Ganador Co.</p>
-          </div>
-
           <div class="flex items-center justify-between bg-obsidian-700/60 p-2.5 rounded-xl border border-gold-500/20">
             <div class="flex items-center gap-2.5 min-w-0">
               <div class="w-9 h-9 rounded-full bg-gradient-to-br from-gold-500 to-emeraldGlow flex items-center justify-center text-obsidian-900 font-bold text-xs flex-shrink-0">A</div>
@@ -288,15 +343,8 @@
             </button>
             <span class="text-gold-400 text-xl hidden sm:inline"><i class="fa-solid fa-gem"></i></span>
             <h2 class="font-cinzel text-base md:text-xl font-bold tracking-wider text-gold-gradient truncate">Sorteos El Ganador Co.</h2>
-            <div class="ml-1 md:ml-4 px-2.5 md:px-3 py-1 rounded-full bg-emeraldGlow/10 border border-emeraldGlow/30 items-center gap-2 hidden sm:flex flex-shrink-0">
-              <span class="w-2 h-2 rounded-full bg-emeraldGlow animate-ping"></span>
-              <span class="text-[11px] text-emeraldGlow font-semibold whitespace-nowrap">Sistema Operativo</span>
-            </div>
           </div>
           <div class="flex items-center gap-2 md:gap-4 flex-shrink-0">
-            <button class="relative p-2.5 rounded-xl bg-obsidian-700/80 border border-gold-500/20 text-gold-300">
-              <i class="fa-solid fa-bell"></i>
-            </button>
             <a href="../../index.html" target="_blank" class="flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl bg-gradient-to-r from-gold-500/20 to-gold-600/30 border border-gold-400/50 text-gold-300 font-semibold text-xs">
               <i class="fa-solid fa-globe"></i> <span class="hidden md:inline">Ver página pública</span>
             </a>
