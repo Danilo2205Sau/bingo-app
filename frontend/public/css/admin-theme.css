@@ -235,6 +235,54 @@ input:focus, select:focus, textarea:focus {
 .modal-overlay { background: rgba(5,4,2,0.75) !important; backdrop-filter: blur(4px) }
 .modal-close { color: var(--texto-sec) !important }
 
+/* ── Textura tipo fibra de carbono en las tarjetas ──────────────── */
+.card, .sorteo-activo, .sorteo-item, .pago-item, #boletas-panel,
+.pagos-lista, .modal-box, .metric-card {
+  background-image:
+    repeating-linear-gradient(45deg, rgba(255,255,255,0.025) 0, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 9px),
+    repeating-linear-gradient(-45deg, rgba(255,255,255,0.025) 0, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 9px) !important;
+}
+
+/* ── Logo de la barra lateral (corona + trébol) ─────────────────── */
+.sidebar-logo {
+  display:flex; flex-direction:column; align-items:center;
+  padding:14px 8px 18px; text-align:center;
+}
+.sidebar-logo .icono {
+  font-size:30px; margin-bottom:4px;
+  animation: corona-mover 2.4s ease-in-out infinite;
+  filter: drop-shadow(0 0 10px rgba(255,213,88,0.7));
+}
+.sidebar-logo .texto {
+  font-size:13px; font-weight:800; letter-spacing:0.12em;
+  color: var(--dorado-claro);
+  text-shadow: 0 0 10px rgba(255,213,88,0.5);
+}
+
+/* ── Título cursivo con brillo barriendo (estilo "super sorteo") ── */
+@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap');
+
+.titulo-brillante, #sorteo-info strong {
+  font-family: 'Dancing Script', cursive !important;
+  font-size: 26px !important;
+  font-weight: 700 !important;
+  background: linear-gradient(100deg, #A9782B 0%, #FFD558 35%, #FFFFFF 50%, #FFD558 65%, #A9782B 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: brillo-barrido 3.5s linear infinite;
+  display: inline-block;
+}
+@keyframes brillo-barrido {
+  0%   { background-position: 250% 0; }
+  100% { background-position: -250% 0; }
+}
+
+/* Icono decorativo tipo llave/trébol junto a títulos */
+.decor-icono { font-size:14px; opacity:.8; margin:0 4px; filter: drop-shadow(0 0 4px rgba(255,213,88,.6)); }
+
 * { scrollbar-width: thin; scrollbar-color: var(--dorado-osc) transparent }
 *::-webkit-scrollbar { width:8px; height:8px }
 *::-webkit-scrollbar-thumb { background: var(--dorado-osc); border-radius:8px }
