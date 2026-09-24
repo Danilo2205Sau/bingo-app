@@ -34,6 +34,8 @@
   </script>
 
   <style>
+    * { box-sizing: border-box; }
+    html, body { height:100%; margin:0; padding:0; }
     body { background-color:#06070a; color:#e2e8f0; font-family:'Plus Jakarta Sans', sans-serif; overflow-x:hidden; }
 
     .text-gold-gradient { background:linear-gradient(135deg,#FFF0B3 0%,#E6C265 40%,#997312 80%,#F5D77F 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
@@ -72,7 +74,7 @@
     ::-webkit-scrollbar-thumb:hover { background:#d4af37 }
 
     /* ── Login ─────────────────────────────────────────── */
-    #pantalla-login { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:20px }
+    #pantalla-login { display:flex; align-items:center; justify-content:center; min-height:100vh; min-height:100dvh; padding:20px }
     .login-box { width:100%; max-width:380px; text-align:center; padding:36px 28px; border-radius:20px }
     .login-box h1 { font-family:'Cinzel',serif; font-size:22px; font-weight:800 }
     .login-box p  { font-size:13px; color:#94a3b8; margin-bottom:22px }
@@ -104,19 +106,37 @@
     .metrics-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; margin-bottom:18px }
     @media (min-width:1024px) { .metrics-grid { grid-template-columns:repeat(4,1fr) } }
     .metric-card {
-      background:linear-gradient(145deg, rgba(20,23,34,.7) 0%, rgba(10,12,18,.85) 100%) !important;
+      background:linear-gradient(145deg, rgba(20,23,34,.85) 0%, rgba(10,12,18,.92) 100%) !important;
       border:1px solid rgba(212,175,55,.22) !important; border-radius:18px !important;
-      padding:20px !important; position:relative; overflow:hidden;
+      padding:18px !important; position:relative; overflow:hidden;
       box-shadow:0 12px 28px -6px rgba(0,0,0,.7);
     }
-    .metric-label { font-size:11px !important; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:#E6C265 !important; margin-bottom:4px !important }
-    .metric-value { font-family:'Plus Jakarta Sans',monospace; font-size:32px !important; font-weight:800 !important;
-      background:linear-gradient(180deg,#FFFFFF 0%,#FFE58F 50%,#D4AF37 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    /* Luz girando alrededor del borde de cada tarjeta/panel */
+    .metric-card::after, .sorteo-activo::after, .card::after {
+      content:''; position:absolute; inset:0; border-radius:inherit; padding:1.5px;
+      background: conic-gradient(from 0deg, transparent 0%, rgba(255,213,88,.9) 6%, transparent 16%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor; mask-composite: exclude;
+      animation: girar-borde 3.5s linear infinite; pointer-events:none;
+    }
+    @keyframes girar-borde { to { transform: rotate(360deg); } }
+
+    .metric-eyebrow { font-size:9.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#8a7a4a }
+    .metric-label { font-size:12px !important; font-weight:700; color:#E6C265 !important; margin:2px 0 8px !important }
+    .metric-value { font-family:'Plus Jakarta Sans',monospace; font-size:30px !important; font-weight:800 !important; color:#FFE58F !important; text-shadow:0 0 18px rgba(212,175,55,.4); }
     .metric-sub { font-size:11px !important; color:#00FF9D !important; font-weight:600 }
-    #m-pendientes { background:linear-gradient(180deg,#FFDCA8,#FF6B00); -webkit-background-clip:text; -webkit-text-fill-color:transparent }
-    .metric-icon { position:absolute; top:20px; right:20px; width:38px; height:38px; border-radius:10px;
+    #m-pendientes { color:#FFB84D !important; text-shadow:0 0 18px rgba(255,107,0,.4) }
+    .metric-icon { width:34px; height:34px; border-radius:9px;
       background:rgba(212,175,55,.1); border:1px solid rgba(212,175,55,.3); display:flex; align-items:center; justify-content:center;
       color:#E6C265; font-size:15px; box-shadow:0 0 15px rgba(212,175,55,.2) }
+
+    .metric-top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px }
+    .metric-badge { font-size:9.5px; font-weight:700; padding:3px 9px; border-radius:999px; text-transform:uppercase; letter-spacing:.04em }
+    .metric-bottom { display:flex; align-items:center; gap:8px; margin-top:12px; padding-top:10px; border-top:1px solid rgba(212,175,55,.12); font-size:10.5px; color:#94a3b8 }
+    .mini-icono { width:26px; height:26px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:11px; flex-shrink:0 }
+
+    .ola-svg path.linea { stroke-dasharray: 240; stroke-dashoffset: 240; animation: ola-crecer 2.5s ease-out infinite; }
+    @keyframes ola-crecer { 0% { stroke-dashoffset:240 } 60%,100% { stroke-dashoffset:0 } }
 
     /* Barra de progreso */
     .progress-wrap { background:#07080b !important; border:1px solid rgba(212,175,55,.3); border-radius:999px !important; height:16px !important; overflow:hidden; padding:2px; margin:10px 0 6px }
@@ -188,6 +208,7 @@
       .sidebar {
         position:fixed; top:0; left:0; bottom:0; z-index:50; width:280px;
         transform:translateX(-100%); transition:transform .25s ease; overflow-y:auto;
+        background:#0D0E15 !important; box-shadow:8px 0 30px rgba(0,0,0,.6);
       }
       .sidebar.abierta { transform:translateX(0) }
     }
@@ -195,9 +216,10 @@
     .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:49 }
     .sidebar-overlay.abierta { display:block }
 
-    .modulo { display:none }
+    .modulo { display:none; width:100%; }
+    .modulo.activo { width:100% }
     .modulo.activo { display:block }
-    .admin-container { max-width:1100px; margin:0 auto; padding:24px }
+    .admin-container { max-width:1100px; width:100%; margin:0 auto; padding:24px }
 
     /* ── Fondo: emblema grande como marca de agua ──────────── */
     .bg-emblema {
@@ -280,7 +302,7 @@
 
   <!-- ── PANTALLA DASHBOARD ──────────────────────────────── -->
   <div id="pantalla-dashboard" class="relative z-10">
-    <div class="flex min-h-screen">
+    <div class="flex min-h-screen" style="min-height:100dvh">
 
       <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
@@ -359,28 +381,74 @@
 
             <div class="metrics-grid">
               <div class="metric-card">
-                <div class="metric-icon"><i class="fa-solid fa-key"></i></div>
-                <div class="metric-label">Boletas vendidas</div>
+                <div class="metric-top">
+                  <div>
+                    <div class="metric-eyebrow">Estadística clave</div>
+                    <div class="metric-label">Boletas vendidas</div>
+                  </div>
+                  <div class="metric-icon"><i class="fa-solid fa-key"></i></div>
+                </div>
                 <div class="metric-value" id="m-boletas">—</div>
                 <div class="metric-sub" id="m-boletas-sub"></div>
+                <div class="metric-bottom">
+                  <span class="mini-icono" style="background:rgba(212,175,55,.12);color:#E6C265"><i class="fa-solid fa-ticket"></i></span>
+                  <span>Total en sorteo activo</span>
+                  <svg class="ola-svg ml-auto" width="60" height="20" viewBox="0 0 60 20">
+                    <path class="linea" d="M0,15 Q10,5 20,10 T40,6 T60,2" fill="none" stroke="#00FF9D" stroke-width="2"/>
+                  </svg>
+                </div>
               </div>
+
               <div class="metric-card">
-                <div class="metric-icon"><i class="fa-solid fa-sack-dollar"></i></div>
-                <div class="metric-label">Dinero recaudado</div>
+                <div class="metric-top">
+                  <div>
+                    <div class="metric-eyebrow">Flujo de caja</div>
+                    <div class="metric-label">Dinero recaudado</div>
+                  </div>
+                  <div class="metric-icon animate-gold-pulse"><i class="fa-solid fa-sack-dollar"></i></div>
+                </div>
                 <div class="metric-value" id="m-dinero">—</div>
                 <div class="metric-sub">aprobados</div>
+                <div class="metric-bottom">
+                  <span class="mini-icono" style="background:rgba(0,255,157,.12);color:#00FF9D"><i class="fa-solid fa-coins"></i></span>
+                  <span>Total recaudado</span>
+                </div>
               </div>
+
               <div class="metric-card">
-                <div class="metric-icon"><i class="fa-solid fa-users-viewfinder"></i></div>
-                <div class="metric-label">Compradores</div>
+                <div class="metric-top">
+                  <div>
+                    <div class="metric-eyebrow">Comunidad</div>
+                    <div class="metric-label">Compradores</div>
+                  </div>
+                  <div class="metric-icon"><i class="fa-solid fa-users-viewfinder"></i></div>
+                </div>
                 <div class="metric-value" id="m-compradores">—</div>
                 <div class="metric-sub">únicos</div>
+                <div class="metric-bottom">
+                  <span>Actividad</span>
+                  <svg class="ola-svg ml-auto" width="60" height="20" viewBox="0 0 60 20">
+                    <path class="linea" d="M0,10 Q8,2 16,10 T32,10 T48,10 T60,10" fill="none" stroke="#E6C265" stroke-width="2"/>
+                  </svg>
+                </div>
               </div>
+
               <div class="metric-card">
-                <div class="metric-icon"><i class="fa-solid fa-hourglass-half"></i></div>
-                <div class="metric-label">Pagos pendientes</div>
+                <div class="metric-top">
+                  <div>
+                    <div class="metric-eyebrow">Revisión requerida</div>
+                    <div class="metric-label">Pagos pendientes</div>
+                  </div>
+                  <div class="metric-icon" style="color:#FF6B00;border-color:rgba(255,107,0,.35);background:rgba(255,107,0,.1)">
+                    <i class="fa-solid fa-hourglass-half fa-spin" style="animation-duration:2.5s"></i>
+                  </div>
+                </div>
                 <div class="metric-value" id="m-pendientes">—</div>
-                <div class="metric-sub">por revisar</div>
+                <div class="metric-sub" style="color:#FFB84D !important">por revisar</div>
+                <div class="metric-bottom">
+                  <span class="mini-icono" style="background:rgba(255,107,0,.12);color:#FF6B00"><i class="fa-solid fa-scale-balanced"></i></span>
+                  <span>Revisión manual</span>
+                </div>
               </div>
             </div>
 
