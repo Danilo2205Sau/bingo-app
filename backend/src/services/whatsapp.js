@@ -10,7 +10,7 @@ const ACCESS_TOKEN    = process.env.META_ACCESS_TOKEN;
 
 async function enviarCartonesPorWhatsApp(ventaId) {
   const { rows } = await db.query(`
-    SELECT c.codigo_unico, c.pdf_url, c.tipo_boleta,
+    SELECT c.codigo_unico, c.numeros, c.pdf_url, c.tipo_boleta,
            comp.nombre, comp.telefono,
            s.nombre AS sorteo, s.fecha_sorteo, s.premio_descripcion,
            v.id AS venta_id
@@ -49,7 +49,8 @@ async function enviarCartonesPorWhatsApp(ventaId) {
       idiomaPlantilla,
       [nombre, sorteo, fecha, premio_descripcion || 'Gran Premio'],
       ventaId,
-      rows[0].pdf_url
+      rows[0].pdf_url,
+      `${nombreArchivoBoleta(rows[0])}.pdf`
     );
   } catch (errPlantilla) {
     console.error(`[Venta ${ventaId}] Falló envío por plantilla, intentando texto libre como respaldo:`, errPlantilla.message);
@@ -75,7 +76,65 @@ async function enviarCartonesPorWhatsApp(ventaId) {
 }
 
 
-async function enviarMensajePlantilla(telefono, nombrePlantilla, idioma, variables, ventaId, documentoUrl = null) {
+// Nombre del archivo de una boleta: Boleta_<número> (ej. Boleta_123456).
+// Para rifa el número es el que eligió/recibió el cliente; para bingo, el código.
+function nombreArchivoBoleta(carton) {
+  const base = (carton.tipo_boleta === 'rifa' && Array.isArray(carton.numeros) && carton.numeros.length)
+    ? carton.numeros.join('')
+    : carton.codigo_unico;
+  return `Boleta_${String(base).replace(/[^A-Za-z0-9_-]/g, '')}`;
+}
+
+// Venta directa (admin): envía SOLO el PDF de la boleta, sin el mensaje de la
+// plantilla. Si Meta rechaza el envío libre (p. ej. número sin conversación
+// abierta), cae a la plantilla como respaldo para que la boleta igual llegue.
+async function enviarBoletaDirectaPorWhatsApp(ventaId) {
+  const { rows } = await db.query(`
+    SELECT c.codigo_unico, c.numeros, c.pdf_url, c.tipo_boleta,
+           comp.nombre, comp.telefono,
+           s.nombre AS sorteo, s.fecha_sorteo, s.premio_descripcion
+    FROM ventas v
+    JOIN compradores comp ON comp.id = v.comprador_id
+    JOIN sorteos s        ON s.id = v.sorteo_id
+    JOIN venta_cartones vc ON vc.venta_id = v.id
+    JOIN cartones c       ON c.id = vc.carton_id
+    WHERE v.id = $1
+  `, [ventaId]);
+
+  if (!rows.length) throw new Error(`Venta ${ventaId} sin cartones`);
+  const carton = rows[0];
+  if (!carton.pdf_url) throw new Error(`Venta ${ventaId} sin pdf_url asignado aún`);
+
+  const numeroFormateado = formatearNumero(carton.telefono);
+  const nombreArchivo = `${nombreArchivoBoleta(carton)}.pdf`;
+  console.log(`[Venta ${ventaId}] Envío directo (sin plantilla) → ${numeroFormateado} como ${nombreArchivo}`);
+
+  try {
+    await enviarDocumento(numeroFormateado, carton.pdf_url, nombreArchivo, null, ventaId);
+  } catch (errDoc) {
+    console.error(`[Venta ${ventaId}] Falló envío directo, usando plantilla como respaldo:`, errDoc.message);
+    const fecha = new Date(carton.fecha_sorteo).toLocaleDateString('es-CO', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+    await enviarMensajePlantilla(
+      numeroFormateado,
+      process.env.WHATSAPP_TEMPLATE_NOMBRE || 'confirmacion_pago_boleta',
+      process.env.WHATSAPP_TEMPLATE_IDIOMA || 'es',
+      [carton.nombre, carton.sorteo, fecha, carton.premio_descripcion || 'Gran Premio'],
+      ventaId,
+      carton.pdf_url,
+      nombreArchivo
+    );
+  }
+
+  await db.query(`
+    INSERT INTO notificaciones (venta_id, canal, estado, mensaje, enviado_en)
+    VALUES ($1, 'whatsapp', 'enviado', $2, NOW())
+  `, [ventaId, `Boleta ${nombreArchivo} enviada (venta directa)`]);
+}
+
+
+async function enviarMensajePlantilla(telefono, nombrePlantilla, idioma, variables, ventaId, documentoUrl = null, nombreArchivo = 'Boleta.pdf') {
   const components = [
     {
       type: 'body',
@@ -94,7 +153,7 @@ async function enviarMensajePlantilla(telefono, nombrePlantilla, idioma, variabl
           type: 'document',
           document: {
             link: documentoUrl,
-            filename: 'Boleta.pdf',
+            filename: nombreArchivo,
           },
         },
       ],
@@ -170,7 +229,7 @@ async function enviarDocumento(telefono, urlDoc, nombreArchivo, caption, ventaId
     document: {
       id:       mediaId,
       filename: nombreArchivo,
-      caption:  caption,
+      ...(caption ? { caption } : {}),
     },
   };
 
@@ -247,4 +306,4 @@ function formatearNumero(telefono) {
   return `57${digits}`;
 }
 
-module.exports = { enviarCartonesPorWhatsApp };
+module.exports = { enviarCartonesPorWhatsApp, enviarBoletaDirectaPorWhatsApp, nombreArchivoBoleta };

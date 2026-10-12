@@ -151,11 +151,13 @@ router.post('/extraer-boletas', auth, async (req, res, next) => {
         : '';
       const whatsappContacto = process.env.WHATSAPP_CONTACTO_PUBLICO || '';
       const { generarHojaCartonesPDF, generarBoletasConImagenPremio } = require('../services/pdfGenerator');
-      const { enviarCartonesPorWhatsApp } = require('../services/whatsapp');
+      const { enviarBoletaDirectaPorWhatsApp, nombreArchivoBoleta } = require('../services/whatsapp');
 
       for (const item of creadas) {
         try {
           let pdfUrl;
+          // El PDF se llama Boleta_<número> (ej. Boleta_123456)
+          const publicId = `boletas/${sorteo_id}/${nombreArchivoBoleta({ tipo_boleta: modalidad.tipo_boleta, numeros: item.numeros, codigo_unico: item.codigo_unico })}`;
           if (sorteoInfo.imagen_premio_url) {
             ({ pdfUrl } = await generarBoletasConImagenPremio({
               cartones: [{ codigo_unico: item.codigo_unico, numeros: item.numeros }],
@@ -166,6 +168,7 @@ router.post('/extraer-boletas', auth, async (req, res, next) => {
               whatsappContacto,
               fuenteResultado: modalidad.fuente_resultado,
               ventaId: item.venta_id,
+              publicId,
             }));
           } else {
             ({ pdfUrl } = await generarHojaCartonesPDF({
@@ -176,10 +179,11 @@ router.post('/extraer-boletas', auth, async (req, res, next) => {
               fechaSorteoTexto,
               ventaId: item.venta_id,
               whatsappContacto,
+              publicId,
             }));
           }
           await db.query('UPDATE cartones SET pdf_url = $1 WHERE id = $2', [pdfUrl, item.carton_id]);
-          await enviarCartonesPorWhatsApp(item.venta_id);
+          await enviarBoletaDirectaPorWhatsApp(item.venta_id);
           console.log(`[Extracción] Boleta ${item.codigo_unico} enviada por WhatsApp`);
         } catch (err) {
           console.error(`[Extracción] Error enviando boleta ${item.codigo_unico}:`, err.message);

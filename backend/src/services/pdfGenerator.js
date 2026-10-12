@@ -100,6 +100,7 @@ async function generarHojaCartonesPDF({
   fechaSorteoTexto,
   ventaId,
   whatsappContacto,
+  publicId,        // opcional: nombre del archivo en Cloudinary (ej. 'boletas/<sorteo>/Boleta_123456')
 }) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'LETTER', margin: 24 });
@@ -109,7 +110,7 @@ async function generarHojaCartonesPDF({
     doc.on('end', async () => {
       const buffer = Buffer.concat(chunks);
       try {
-        const url = await cloudinary.subirBuffer(buffer, `hojas/${ventaId}`);
+        const url = await cloudinary.subirBuffer(buffer, publicId || `hojas/${ventaId}`);
         resolve({ pdfUrl: url });
       } catch (err) { reject(err); }
     });
@@ -246,6 +247,7 @@ async function generarBoletasConImagenPremio({
   whatsappContacto,
   fuenteResultado,
   ventaId,
+  publicId,          // opcional: nombre del archivo en Cloudinary (ej. 'boletas/<sorteo>/Boleta_123456')
 }) {
   let imagenBuffer = null;
   if (imagenPremioUrl) {
@@ -263,7 +265,7 @@ async function generarBoletasConImagenPremio({
     doc.on('end', async () => {
       const buffer = Buffer.concat(chunks);
       try {
-        const url = await cloudinary.subirBuffer(buffer, `boletas/${ventaId}`);
+        const url = await cloudinary.subirBuffer(buffer, publicId || `boletas/${ventaId}`);
         resolve({ pdfUrl: url });
       } catch (err) { reject(err); }
     });
