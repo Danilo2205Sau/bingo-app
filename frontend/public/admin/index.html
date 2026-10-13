@@ -343,6 +343,20 @@
       header.sticky { position:sticky; top:0; z-index:30; background:rgba(13,14,21,.95) !important }
       .btn-hamburguesa { width:38px; height:38px; flex-shrink:0 }
     }
+
+    /* ══ AJUSTES v8: scroll iOS/Brave, texto dorado y espacio inferior ══ */
+    html { height:auto !important; overflow-x:visible !important; -webkit-text-size-adjust:100% }
+    body { height:auto !important; min-height:100vh; min-height:100dvh; overflow-x:hidden; -webkit-overflow-scrolling:touch }
+    .admin-container { padding-bottom:calc(110px + env(safe-area-inset-bottom)) !important }
+    @media (max-width:900px) {
+      .text-gold-gradient, #sorteo-info strong, .sorteo-activo strong {
+        background:none !important; -webkit-background-clip:border-box !important; background-clip:border-box !important;
+        -webkit-text-fill-color:#F5D77F !important; color:#F5D77F !important;
+      }
+      header.sticky h2 { overflow:visible !important; white-space:normal !important; line-height:1.15; font-size:15px !important }
+      header.sticky .hidden.sm\:inline { display:inline !important }
+      .backdrop-blur-xl, .backdrop-blur-2xl, .glass-card, .modal-overlay { -webkit-backdrop-filter:none !important; backdrop-filter:none !important }
+    }
   </style>
 </head>
 <body class="bg-obsidian-900 bg-pattern min-h-screen text-slate-200 antialiased selection:bg-gold-500 selection:text-black">

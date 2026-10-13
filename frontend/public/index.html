@@ -6,18 +6,28 @@
   <title>Sorteos El Ganador Co — Compra tus boletas</title>
   <link rel="stylesheet" href="css/main.css" />
     <link rel="stylesheet" href="css/bingo-bg.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/landing.css" />
 </head>
 <body>
+  <!-- PORTADA: barra, bienvenida y accesos (js/landing.js) -->
+  <div id="lp-top"></div>
+
   <!-- SELECTOR DE EVENTOS (cuando hay varios sorteos activos) -->
-  <section id="selector-eventos" class="container" style="display:none;padding-top:24px">
-    <h2 class="step-label" style="margin-bottom:14px">🎉 Sorteos activos — elige uno</h2>
-    <div id="eventos-grid" style="display:grid;gap:14px"></div>
+  <section id="selector-eventos" class="lp-selector" style="display:none">
+    <div class="lp-wrap">
+      <h2 class="lp-title">🎉 Sorteos activos</h2>
+      <p class="lp-sub">Elige tu sorteo y participa</p>
+      <div id="eventos-grid" class="lp-grid"></div>
+    </div>
   </section>
 
   <!-- HERO -->
   <header class="hero" id="hero-section" style="display:none">
     <div class="hero-badge" id="sorteo-estado">Cargando sorteo...</div>
-    <h1 id="sorteo-nombre">Sorteos El Ganador Co.</h1>
+    <h1 id="sorteo-nombre">Sorteos El Ganador Co</h1>
     <img id="sorteo-imagen-premio" src="" alt="" style="display:none;max-width:220px;border-radius:12px;margin:10px auto;box-shadow:0 6px 20px rgba(0,0,0,.35)" />
     <div class="premio" id="sorteo-premio">$0</div>
     <p class="fecha" id="sorteo-fecha"></p>
@@ -140,6 +150,10 @@
 
   </main>
 
+  <div id="lp-bottom"></div>
+
+  <script src="js/site-config.js"></script>
+  <script src="js/landing.js"></script>
   <script src="js/bingo-bg.js"></script>
   <script src="js/api.js"></script>
   <script src="js/compra.js"></script>

@@ -36,7 +36,7 @@ async function cargarEventosActivos() {
   if (!eventosActivos.length) {
     document.getElementById('selector-eventos').style.display = 'block';
     document.getElementById('eventos-grid').innerHTML =
-      '<p style="color:#fff;text-align:center">No hay sorteos activos en este momento. Vuelve pronto.</p>';
+      '<p class="lp-vacio">No hay sorteos activos en este momento. ¡Vuelve pronto!</p>';
     return;
   }
 
@@ -53,20 +53,31 @@ function mostrarSelectorEventos() {
   document.getElementById('flujo-compra').style.display = 'none';
   document.getElementById('selector-eventos').style.display = 'block';
 
-  document.getElementById('eventos-grid').innerHTML = eventosActivos.map(ev => {
+  document.body.classList.remove('vista-compra');
+  const grid = document.getElementById('eventos-grid');
+  grid.classList.toggle('uno', eventosActivos.length === 1);
+  grid.innerHTML = eventosActivos.map(ev => {
     const mod = (ev.modalidades && ev.modalidades[0]) || {};
-    const disponibles = (mod.total_boletas || 0) - (mod.boletas_vendidas || 0);
+    const total = mod.total_boletas || 0;
+    const vendidas = mod.boletas_vendidas || 0;
+    const disponibles = Math.max(total - vendidas, 0);
+    const pct = total ? Math.min(100, Math.round((vendidas / total) * 100)) : 0;
     return `
-      <div class="card" style="cursor:pointer" onclick="seleccionarEvento('${ev.id}')">
-        <div style="display:flex;gap:12px;align-items:center">
-          ${ev.imagen_premio_url ? `<img src="${ev.imagen_premio_url}" alt="" style="width:70px;height:70px;object-fit:cover;border-radius:10px;flex-shrink:0" />` : ''}
-          <div style="flex:1;min-width:0">
-            <h3 style="font-size:16px;margin-bottom:4px">${ev.nombre} ${mod.tipo_boleta === 'rifa' ? '🎟️' : '🎱'}</h3>
-            <p style="font-size:13px;color:#888;margin-bottom:4px">${ev.premio_descripcion || mod.nombre || ''}</p>
-            <p style="font-size:12px;color:#888">${formatFecha(ev.fecha_sorteo)} · ${formatCOP(mod.precio_boleta || 0)} c/u · ${disponibles} disponibles</p>
-          </div>
+      <article class="lp-card" onclick="seleccionarEvento('${ev.id}')">
+        <div class="lp-card-img">
+          ${ev.imagen_premio_url ? `<img src="${ev.imagen_premio_url}" alt="${ev.nombre}" loading="lazy" />` : `<span class="lp-noimg">🏆</span>`}
+          <span class="lp-tag">${mod.tipo_boleta === 'rifa' ? '🎟️ Rifa' : '🎱 Bingo'}</span>
+          <span class="lp-tag disp">${disponibles} disponibles</span>
         </div>
-      </div>
+        <div class="lp-card-body">
+          <h3>${ev.nombre}</h3>
+          <p class="prem">${ev.premio_descripcion || mod.nombre || ''}</p>
+          <div class="lp-meta"><span>📅 ${formatFecha(ev.fecha_sorteo)}</span><span class="lp-price">${formatCOP(mod.precio_boleta || 0)} <small>c/u</small></span></div>
+          <div class="lp-bar"><i style="width:${pct}%"></i></div>
+          <div class="lp-meta"><span>${pct}% vendido</span></div>
+          <div class="lp-cta">Quiero mis boletas →</div>
+        </div>
+      </article>
     `;
   }).join('');
 }
@@ -77,6 +88,7 @@ async function seleccionarEvento(id) {
   modalidadActiva = (sorteoActivo.modalidades && sorteoActivo.modalidades[0]) || null;
   numerosElegidos = [];
 
+  document.body.classList.add('vista-compra');
   document.getElementById('selector-eventos').style.display = 'none';
   document.getElementById('hero-section').style.display = 'block';
   document.getElementById('flujo-compra').style.display = 'block';
