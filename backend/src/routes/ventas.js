@@ -58,6 +58,7 @@ router.post('/', upload.single('comprobante'), async (req, res, next) => {
 
       const client = await db.pool.connect();
     let ventaId;
+    let ventaEstado = 'pendiente';
     try {
       await client.query('BEGIN');
 
@@ -68,6 +69,7 @@ router.post('/', upload.single('comprobante'), async (req, res, next) => {
         RETURNING id, estado_pago, creado_en
       `, [comprador_id, sorteo_id, modalidad_id, cant, total, metodo_pago, comprobante_url]);
       ventaId = venta[0].id;
+      ventaEstado = venta[0].estado_pago;
 
       // Si el comprador eligió números específicos, vincularlos primero
       let idsElegidos = [];
@@ -121,9 +123,9 @@ router.post('/', upload.single('comprobante'), async (req, res, next) => {
 
     res.status(201).json({
       message: 'Compra registrada. El administrador revisará tu pago pronto.',
-      venta_id: venta[0].id,
+      venta_id: ventaId,
       total_pagado: total,
-      estado: venta[0].estado_pago,
+      estado: ventaEstado,
     });
   } catch (err) { next(err); }
 });
