@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sorteos El Ganador CO — Admin</title>
 
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="tailwind.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,25 +13,6 @@
 
   <link rel="stylesheet" href="../css/main.css" />
 
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            gold: { 100:'#FFF6D6', 300:'#F5D77F', 400:'#E6C265', 500:'#D4AF37', 600:'#AA820A', 800:'#523E00' },
-            obsidian: { 900:'#07080B', 800:'#0D0E15', 700:'#141722', 600:'#1E2333' },
-            emeraldGlow: '#00FF9D',
-            neonOrange: '#FF6B00'
-          },
-          fontFamily: {
-            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-            cinzel: ['Cinzel', 'serif'],
-            script: ['"Great Vibes"', 'cursive']
-          }
-        }
-      }
-    }
-  </script>
 
   <style>
     * { box-sizing: border-box; }
@@ -352,6 +333,15 @@
     @media (min-width:641px) and (max-width:1024px) {
       .admin-container { padding:20px !important }
       .modal-box { max-width:520px }
+    }
+
+    /* ══ AJUSTES v7: móvil (sin depender de CDN) ══ */
+    #bgCanvas { position:fixed; top:0; left:0; width:100%; height:100%; z-index:0; pointer-events:none; opacity:.4 }
+    .admin-container { overflow:visible !important; flex:1 1 auto }
+    #pantalla-dashboard main { min-height:100dvh }
+    @media (max-width:900px) {
+      header.sticky { position:sticky; top:0; z-index:30; background:rgba(13,14,21,.95) !important }
+      .btn-hamburguesa { width:38px; height:38px; flex-shrink:0 }
     }
   </style>
 </head>
