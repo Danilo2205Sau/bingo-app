@@ -262,6 +262,97 @@
     @media (max-width: 400px) {
       .metrics-grid { grid-template-columns: 1fr !important; }
     }
+
+    /* ══ AJUSTES v6: modales, acciones, autocompletado y responsive ══ */
+
+    /* 1. Los modales quedaban DETRÁS del panel (z-index) y se veían como un
+          fantasma translúcido al cambiar de módulo. Ahora van por encima de todo. */
+    .modal-overlay { z-index:1000 !important; overflow-y:auto; align-items:center; -webkit-overflow-scrolling:touch }
+    .modal-box { background:#0D0E15 !important; position:relative; width:100%; max-width:480px;
+                 max-height:90vh; max-height:90dvh; overflow-y:auto; box-shadow:0 25px 60px -10px rgba(0,0,0,.9), 0 0 0 1px rgba(212,175,55,.25) !important }
+    .modal-box h3 { font-family:'Cinzel',serif; font-size:18px; font-weight:800; margin-bottom:14px !important; padding-right:36px }
+    .modal-close { position:absolute !important; top:12px; right:12px; float:none !important; width:34px; height:34px;
+                   display:flex; align-items:center; justify-content:center; padding:0 !important; font-size:16px !important; line-height:1 }
+    .modal-box .form-group { margin-bottom:14px }
+    .modal-box label { display:block; font-size:12px; margin-bottom:5px }
+    .modal-box input:not([type=checkbox]):not([type=file]), .modal-box textarea, .modal-box select { width:100%; min-width:0 }
+    .modal-box textarea { resize:vertical; min-height:70px }
+    .modal-aumentar { display:flex; gap:8px; align-items:stretch }
+    .modal-aumentar input { flex:1 1 auto }
+    .modal-aumentar button { flex:0 0 auto; padding:0 14px; white-space:nowrap }
+    .modal-check { display:flex; align-items:center; gap:10px; flex-wrap:wrap }
+    .modal-check label { flex:1 1 150px; margin:0 !important; font-size:13px; color:#cbd5e1 !important }
+    .modal-check button { flex:0 0 auto; padding:7px 14px; font-size:12px }
+    .modal-botones { display:flex; gap:8px; margin-top:6px; flex-wrap:wrap }
+    .modal-botones button { flex:1 1 140px; padding:12px 14px }
+    body.modal-abierto { overflow:hidden }
+
+    input[type=checkbox] { width:18px !important; height:18px; padding:0 !important; accent-color:#D4AF37; flex:0 0 auto }
+
+    /* Botón "Seleccionar archivo" con el tema */
+    input[type=file] { padding:8px !important; font-size:13px; color:#94a3b8 !important; width:100% }
+    input[type=file]::file-selector-button {
+      margin-right:12px; padding:8px 14px; border-radius:10px; border:1px solid rgba(212,175,55,.4);
+      background:linear-gradient(135deg,#D4AF37,#AA820A); color:#07080b; font-weight:700; font-size:12px; cursor:pointer;
+    }
+
+    /* 2. Acciones de cada evento (Activar / Cerrar ventas / Editar / Eliminar) */
+    .sorteo-item-top { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap }
+    .sorteo-item-acciones { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px }
+    .sorteo-item-acciones button { padding:8px 14px; font-size:12px; line-height:1.2; border-radius:10px !important; white-space:nowrap }
+    .sorteo-item-acciones button.activar { background:linear-gradient(135deg,#00FF9D,#00A868) !important; color:#052014 !important; border:none !important }
+    .sorteo-item-acciones button.cerrar  { border-color:#E6C265 !important; color:#E6C265 !important; background:transparent !important }
+    .pagos-lista .sorteo-item, .pagos-lista .pago-item {
+      background:transparent !important; box-shadow:none !important; border:none !important; border-radius:0 !important;
+      border-bottom:1px solid rgba(212,175,55,.12) !important; padding:14px 16px;
+    }
+    .pagos-lista .sorteo-item:last-child, .pagos-lista .pago-item:last-child { border-bottom:none !important }
+    .pago-item { display:flex; align-items:center; gap:12px }
+    .pago-meta { flex:1; min-width:0 }
+    .pago-meta strong { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+    .pago-meta span[style*="3C3489"] { color:#E6C265 !important }
+    .pago-acciones { display:flex; gap:6px; flex-shrink:0; align-items:center }
+    .pago-acciones button { padding:7px 12px; font-size:12px }
+    .avatar { width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:13px }
+    .boleta-row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 6px; font-size:13px; flex-wrap:wrap }
+    .boleta-row button { padding:6px 12px; font-size:12px }
+    #boletas-resultado, #extraidas-lista, #modal-validacion { color:#cbd5e1 }
+    .empty-pagos { text-align:center; padding:26px 12px; font-size:14px }
+
+    /* 3. Autocompletado del navegador: sin fondo azul claro y sin rellenar solo */
+    input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus,
+    textarea:-webkit-autofill, select:-webkit-autofill {
+      -webkit-text-fill-color:#e2e8f0 !important; caret-color:#e2e8f0;
+      -webkit-box-shadow:0 0 0 1000px #0b0d14 inset !important; box-shadow:0 0 0 1000px #0b0d14 inset !important;
+      transition:background-color 99999s ease-out 0s;
+    }
+
+    /* Luz que recorre el borde: ahora acotada a CADA tarjeta (antes se salía a toda la pantalla) */
+    @property --ang { syntax:'<angle>'; initial-value:0deg; inherits:false }
+    .sorteo-activo, .card { position:relative }
+    .metric-card::after, .sorteo-activo::after, .card::after {
+      background:conic-gradient(from var(--ang), transparent 0%, rgba(255,213,88,.9) 6%, transparent 16%);
+      animation:girar-ang 3.5s linear infinite;
+    }
+    @keyframes girar-ang { to { --ang:360deg } }
+
+    /* Responsive: tablet y móvil */
+    #boletas-panel .grid > *, .sorteo-activo .grid > * { min-width:0 }
+    #boletas-panel input, #boletas-panel button, .sorteo-activo input, .sorteo-activo button { max-width:100% }
+    @media (max-width:640px) {
+      .modal-overlay { padding:12px !important; align-items:flex-start }
+      .modal-box { max-height:none; margin:auto 0 }
+      .sorteo-item-acciones button { flex:1 1 calc(50% - 8px); text-align:center }
+      .pagos-lista .sorteo-item, .pagos-lista .pago-item { padding:12px }
+      .pago-item { flex-wrap:wrap }
+      .pago-acciones { width:100%; justify-content:flex-end }
+      .boleta-row { flex-direction:column; align-items:flex-start }
+      .boleta-row > div:last-child { text-align:left !important }
+    }
+    @media (min-width:641px) and (max-width:1024px) {
+      .admin-container { padding:20px !important }
+      .modal-box { max-width:520px }
+    }
   </style>
 </head>
 <body class="bg-obsidian-900 bg-pattern min-h-screen text-slate-200 antialiased selection:bg-gold-500 selection:text-black">
@@ -346,7 +437,7 @@
             <div class="flex items-center gap-2.5 min-w-0">
               <div class="w-9 h-9 rounded-full bg-gradient-to-br from-gold-500 to-emeraldGlow flex items-center justify-center text-obsidian-900 font-bold text-xs flex-shrink-0">A</div>
               <div class="min-w-0">
-                <p class="text-xs font-bold text-slate-200 leading-none truncate">ADMIN</p>
+                <p class="text-xs font-bold text-slate-200 leading-none truncate">Administrador</p>
                 <span id="admin-nombre" class="text-[10px] text-gold-400 font-mono"></span>
               </div>
             </div>
@@ -424,7 +515,7 @@
                   <div class="metric-icon"><i class="fa-solid fa-users-viewfinder"></i></div>
                 </div>
                 <div class="metric-value" id="m-compradores">—</div>
-                <div class="metric-sub">CLIENTES</div>
+                <div class="metric-sub">únicos</div>
                 <div class="metric-bottom">
                   <span>Actividad</span>
                   <svg class="ola-svg ml-auto" width="60" height="20" viewBox="0 0 60 20">
@@ -452,7 +543,7 @@
               </div>
             </div>
 
-            <div class="section-title">Sorteos activos</div>
+            <div class="section-title">Sorteo activo</div>
             <div class="sorteo-activo energy-line" id="sorteo-info">
               <p style="color:#94a3b8;font-size:14px">Cargando...</p>
             </div>
@@ -594,8 +685,8 @@
                 <select id="boletas-sorteo-select" class="w-full px-3 py-2.5"></select>
               </div>
               <div class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 mb-3">
-                <input type="text" id="boletas-buscar-numero" placeholder="Buscar por número/código" class="px-3 py-2.5" />
-                <input type="text" id="boletas-buscar-telefono" placeholder="Buscar por teléfono" class="px-3 py-2.5" />
+                <input type="text" id="boletas-buscar-numero" name="bsq-num-x1" placeholder="Buscar por número/código" class="px-3 py-2.5" autocomplete="off" autocapitalize="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly')" />
+                <input type="text" id="boletas-buscar-telefono" name="bsq-tel-x2" placeholder="Buscar por teléfono" inputmode="numeric" class="px-3 py-2.5" autocomplete="off" autocapitalize="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly')" />
                 <button class="btn-action primary" id="btn-buscar-boletas"><i class="fa-solid fa-magnifying-glass mr-1"></i>Buscar</button>
               </div>
               <div id="boletas-resultado" style="max-height:340px;overflow-y:auto"></div>
@@ -608,10 +699,10 @@
                 <select id="extraer-sorteo-select" class="w-full px-3 py-2.5"></select>
               </div>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
-                <input type="number" id="extraer-cantidad" placeholder="Cantidad" min="1" class="px-3 py-2.5" />
-                <input type="tel" id="extraer-telefono" placeholder="Teléfono (10 dígitos)" class="px-3 py-2.5" />
+                <input type="number" id="extraer-cantidad" name="ext-cant-x3" placeholder="Cantidad" min="1" class="px-3 py-2.5" autocomplete="off" />
+                <input type="text" id="extraer-telefono" name="ext-tel-x4" placeholder="Teléfono (10 dígitos)" inputmode="numeric" maxlength="12" class="px-3 py-2.5" autocomplete="off" autocapitalize="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly')" />
               </div>
-              <input type="text" id="extraer-nombre" placeholder="Nombre (opcional, ej. Administrador)" class="w-full px-3 py-2.5 mb-2" />
+              <input type="text" id="extraer-nombre" name="ext-nom-x5" placeholder="Nombre (opcional, ej. Administrador)" class="w-full px-3 py-2.5 mb-2" autocomplete="off" />
               <div class="flex gap-2">
                 <button class="btn-action success flex-1" id="btn-extraer-boletas"><i class="fa-solid fa-paper-plane mr-1"></i>Extraer boletas</button>
                 <button class="btn-action flex-1" id="btn-toggle-extraidas"><i class="fa-solid fa-list mr-1"></i>Boletas extraídas</button>
@@ -619,7 +710,7 @@
               <div id="extraer-mensaje" class="text-xs mt-1.5"></div>
 
               <div id="extraidas-panel" style="display:none" class="mt-3.5 pt-3 border-t border-gold-500/15">
-                <input type="text" id="extraidas-buscar" placeholder="🔍 Buscar por código, número o teléfono" class="w-full px-3 py-2.5 mb-2.5" />
+                <input type="text" id="extraidas-buscar" name="ext-bsq-x6" placeholder="🔍 Buscar por código, número o teléfono" class="w-full px-3 py-2.5 mb-2.5" autocomplete="off" />
                 <div id="extraidas-lista" style="max-height:360px;overflow-y:auto">
                   <div class="empty-pagos">Cargando...</div>
                 </div>
@@ -647,9 +738,9 @@
       <h3 id="modal-titulo" class="mb-2">Comprobante</h3>
       <p id="modal-detalle" class="text-sm mb-2" style="color:#94a3b8"></p>
       <img id="modal-img" src="" alt="Comprobante de pago" class="w-full rounded-lg my-3" />
-      <div class="flex gap-2 mt-3">
-        <button class="btn-aprobar flex-1 py-3 text-sm" id="modal-aprobar">✓ Aprobar y enviar cartón</button>
-        <button class="btn-rechazar flex-1 py-3 text-sm" id="modal-rechazar">✕ Rechazar</button>
+      <div class="modal-botones mt-3">
+        <button class="btn-aprobar text-sm" id="modal-aprobar">✓ Aprobar y enviar cartón</button>
+        <button class="btn-rechazar text-sm" id="modal-rechazar">✕ Rechazar</button>
       </div>
     </div>
   </div>
@@ -678,23 +769,23 @@
       </div>
       <div class="form-group">
         <label>Reemplazar imagen de premiación (opcional)</label>
-        <input type="file" id="e-imagen" accept="image/jpeg,image/png,image/webp" class="w-full" />
+        <input type="file" id="e-imagen" accept="image/jpeg,image/png,image/webp" />
       </div>
       <div class="form-group">
         <label>Aumentar total de boletas (modalidad: <span id="e-modalidad-nombre"></span>)</label>
-        <div class="flex gap-2">
-          <input type="number" id="e-nuevo-total" placeholder="Nuevo total" min="1" class="px-3 py-2.5" />
-          <button class="btn-action" id="btn-aumentar-boletas" style="white-space:nowrap">Generar nuevas</button>
+        <div class="modal-aumentar">
+          <input type="number" id="e-nuevo-total" placeholder="Nuevo total" min="1" class="px-3 py-2.5" autocomplete="off" />
+          <button class="btn-action" id="btn-aumentar-boletas">Generar nuevas</button>
         </div>
         <div id="e-aumentar-msg" class="text-xs mt-1"></div>
       </div>
-      <div class="form-group flex items-center gap-2">
-        <input type="checkbox" id="e-permite-elegir" class="w-auto" />
-        <label for="e-permite-elegir" class="!mb-0">El comprador puede elegir su número</label>
-        <button class="btn-action ml-auto text-xs px-2.5 py-1.5" id="btn-guardar-elegir">Guardar</button>
+      <div class="form-group modal-check">
+        <input type="checkbox" id="e-permite-elegir" />
+        <label for="e-permite-elegir">El comprador puede elegir su número</label>
+        <button class="btn-action" id="btn-guardar-elegir">Guardar</button>
       </div>
-      <div class="flex gap-2 mt-2">
-        <button class="btn-action success flex-1" id="btn-guardar-edicion">Guardar cambios</button>
+      <div class="modal-botones">
+        <button class="btn-action success" id="btn-guardar-edicion">Guardar cambios</button>
         <button class="btn-action" id="btn-cancelar-edicion">Cancelar</button>
       </div>
     </div>
@@ -735,13 +826,29 @@
     btnHamb.addEventListener('click', abrirMenu);
     overlayEl.addEventListener('click', cerrarMenu);
 
+
+    // ── Bloquear el scroll de fondo mientras hay un modal abierto ──
+    (function () {
+      const modales = document.querySelectorAll('.modal-overlay');
+      const sync = () => {
+        const abierto = [...modales].some(m => m.style.display !== 'none' && m.style.display !== '');
+        document.body.classList.toggle('modal-abierto', abierto);
+      };
+      modales.forEach(m => new MutationObserver(sync).observe(m, { attributes: true, attributeFilter: ['style'] }));
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') modales.forEach(m => { m.style.display = 'none'; });
+      });
+    })();
+
     document.querySelectorAll('.nav-item[data-modulo]').forEach(btn => {
       btn.addEventListener('click', () => {
         const modulo = btn.dataset.modulo;
         document.querySelectorAll('.nav-item[data-modulo]').forEach(b => b.classList.remove('activo'));
         btn.classList.add('activo');
         document.querySelectorAll('.modulo[data-modulo]').forEach(m => m.classList.toggle('activo', m.dataset.modulo === modulo));
+        document.querySelectorAll('.modal-overlay').forEach(mo => { mo.style.display = 'none'; });
         cerrarMenu();
+        window.scrollTo(0, 0);
       });
     });
   </script>
