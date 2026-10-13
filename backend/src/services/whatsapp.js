@@ -109,22 +109,35 @@ async function enviarBoletaDirectaPorWhatsApp(ventaId) {
   const nombreArchivo = `${nombreArchivoBoleta(carton)}.pdf`;
   console.log(`[Venta ${ventaId}] Envío directo (sin plantilla) → ${numeroFormateado} como ${nombreArchivo}`);
 
-  try {
-    await enviarDocumento(numeroFormateado, carton.pdf_url, nombreArchivo, null, ventaId);
-  } catch (errDoc) {
-    console.error(`[Venta ${ventaId}] Falló envío directo, usando plantilla como respaldo:`, errDoc.message);
-    const fecha = new Date(carton.fecha_sorteo).toLocaleDateString('es-CO', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-    });
+  const numeroBoleta = nombreArchivoBoleta(carton).replace(/^Boleta_/, '');
+  const plantillaDirecta = process.env.WHATSAPP_TEMPLATE_DIRECTA; // plantilla mínima solo para venta directa
+  const idioma = process.env.WHATSAPP_TEMPLATE_IDIOMA || 'es';
+
+  if (plantillaDirecta) {
+    // Camino confiable: plantilla mínima con el PDF en el encabezado.
+    // Llega siempre, incluso a números sin conversación abierta en 24h.
     await enviarMensajePlantilla(
-      numeroFormateado,
-      process.env.WHATSAPP_TEMPLATE_NOMBRE || 'confirmacion_pago_boleta',
-      process.env.WHATSAPP_TEMPLATE_IDIOMA || 'es',
-      [carton.nombre, carton.sorteo, fecha, carton.premio_descripcion || 'Gran Premio'],
-      ventaId,
-      carton.pdf_url,
-      nombreArchivo
+      numeroFormateado, plantillaDirecta, idioma, [numeroBoleta],
+      ventaId, carton.pdf_url, nombreArchivo
     );
+  } else {
+    // Sin plantilla configurada: documento libre (solo llega si el número
+    // le escribió al negocio en las últimas 24 h).
+    try {
+      await enviarDocumento(numeroFormateado, carton.pdf_url, nombreArchivo, null, ventaId);
+    } catch (errDoc) {
+      console.error(`[Venta ${ventaId}] Falló envío directo, usando plantilla completa como respaldo:`, errDoc.message);
+      const fecha = new Date(carton.fecha_sorteo).toLocaleDateString('es-CO', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+      });
+      await enviarMensajePlantilla(
+        numeroFormateado,
+        process.env.WHATSAPP_TEMPLATE_NOMBRE || 'confirmacion_pago_boleta',
+        idioma,
+        [carton.nombre, carton.sorteo, fecha, carton.premio_descripcion || 'Gran Premio'],
+        ventaId, carton.pdf_url, nombreArchivo
+      );
+    }
   }
 
   await db.query(`
