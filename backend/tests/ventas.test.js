@@ -213,6 +213,25 @@ describe('PATCH /api/admin/ventas/:id/aprobar', () => {
     expect(trabajos).toEqual([{ estado: 'pendiente', tipo_trabajo: 'venta_aprobada' }]);
   });
 
+  test('❌ no aprueba ni asigna parcialmente si no hay cartones suficientes', async () => {
+    const comprador = await crearComprador();
+    const venta = await crearVenta(comprador.id, sorteo.id, { cantidad: 6 });
+
+    const res = await request(app)
+      .patch(`/api/admin/ventas/${venta.id}/aprobar`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(409);
+    const { rows } = await db.query(`
+      SELECT v.estado_pago, COUNT(vc.carton_id)::int AS cartones_asignados
+      FROM ventas v
+      LEFT JOIN venta_cartones vc ON vc.venta_id = v.id
+      WHERE v.id = $1
+      GROUP BY v.id
+    `, [venta.id]);
+    expect(rows).toEqual([{ estado_pago: 'pendiente', cartones_asignados: 0 }]);
+  });
+
   test('✅ los cartones asignados quedan marcados como vendidos', async () => {
     const comprador = await crearComprador();
     const venta     = await crearVenta(comprador.id, sorteo.id, { cantidad: 1 });
@@ -312,3 +331,4 @@ describe('PATCH /api/admin/ventas/:id/rechazar', () => {
     expect(countersAfterReject.rows[0]).toEqual({ cartones_vendidos: 0, boletas_vendidas: 0 });
   });
 });
+
