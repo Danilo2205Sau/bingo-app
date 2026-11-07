@@ -225,9 +225,10 @@ router.patch('/ventas/:id/aprobar', auth, async (req, res, next) => {
 
     const venta = rows[0];
 
-    // 2. Los cartones ya quedaron asignados desde que se creó la venta —
-    //    aquí solo los marcamos como vendidos (pagados)
-    const cartones = await client.query(`
+    // 2. Las ventas nuevas ya tienen cartones asignados al comprarse. Las
+    //    ventas antiguas que quedaron pendientes sin asignación se completan
+    //    aquí dentro de la misma transacción antes de confirmar el pago.
+    let cartones = await client.query(`
       SELECT c.id, c.codigo_unico, c.numeros, c.tipo_boleta
       FROM cartones c
       JOIN venta_cartones vc ON vc.carton_id = c.id
@@ -235,9 +236,24 @@ router.patch('/ventas/:id/aprobar', auth, async (req, res, next) => {
       FOR UPDATE OF c
     `, [venta.id]);
 
-    if (cartones.rows.length < venta.cantidad) {
+    if (cartones.rows.length === 0) {
+      const asignados = await asignarCartonesAVenta(client, {
+        modalidadId: venta.modalidad_id,
+        ventaId: venta.id,
+        cantidad: venta.cantidad,
+      });
+
+      if (!asignados) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'No hay suficientes boletas disponibles para completar esta venta' });
+      }
+
+      cartones = { rows: asignados };
+    }
+
+    if (cartones.rows.length !== venta.cantidad) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'Esta venta no tiene boletas asignadas (dato inconsistente)' });
+      return res.status(409).json({ error: 'La cantidad de boletas asignadas no coincide con la venta (dato inconsistente)' });
     }
 
     for (const carton of cartones.rows) {
@@ -346,3 +362,4 @@ router.get('/eventos/:sorteoId/boletas', auth, async (req, res, next) => {
 });
 
 module.exports = router;
+
