@@ -21,6 +21,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function inicializarEventos() {
+  document.addEventListener('click', manejarAccionDelegada);
+
   document.getElementById('btn-login').addEventListener('click', hacerLogin);
   document.getElementById('login-pass').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') hacerLogin();
@@ -102,6 +104,26 @@ function inicializarEventos() {
   });
 
   document.getElementById('extraidas-buscar').addEventListener('input', renderExtraidas);
+}
+
+function manejarAccionDelegada(event) {
+  const boton = event.target.closest('[data-admin-action]');
+  if (!boton) return;
+
+  const id = boton.dataset.id;
+  switch (boton.dataset.adminAction) {
+    case 'aprobar-extraida': return aprobarVentaExtraida(id);
+    case 'rechazar-extraida': return rechazarVentaExtraida(id);
+    case 'cambiar-estado': return cambiarEstado(id, boton.dataset.estado);
+    case 'editar-evento': return abrirModalEditar(id);
+    case 'eliminar-evento': return eliminarEvento(id);
+    case 'ver-comprobante': return verComprobante(id);
+    case 'aprobar-venta': return aprobarVenta(id);
+    case 'rechazar-venta': {
+      const notas = prompt('Motivo del rechazo (opcional):') || '';
+      return rechazarVenta(id, notas);
+    }
+  }
 }
 
 async function hacerLogin() {
@@ -199,7 +221,7 @@ async function cargarBoletasExtraidas() {
     todasLasExtraidas = await Api.getBoletasExtraidas(tokenAdmin);
     renderExtraidas();
   } catch (err) {
-    lista.innerHTML = `<div class="empty-pagos" style="color:#D85A30">${err.message}</div>`;
+    lista.innerHTML = `<div class="empty-pagos" style="color:#D85A30">${escapeHTML(err.message)}</div>`;
   }
 }
 
@@ -234,10 +256,10 @@ function renderExtraidas() {
           <div style="color:#888;font-size:11px">${escapeHTML(v.comprador_telefono)} · ${tiempoRelativo(v.creado_en)}</div>
         </div>
         <div style="display:flex;align-items:center;gap:6px">
-          <span class="badge ${badgeClaseEstado(v.estado_pago === 'aprobado' ? 'activo' : v.estado_pago === 'rechazado' ? 'cerrado' : 'borrador')}">${estadoTexto[v.estado_pago] || v.estado_pago}</span>
+          <span class="badge ${badgeClaseEstado(v.estado_pago === 'aprobado' ? 'activo' : v.estado_pago === 'rechazado' ? 'cerrado' : 'borrador')}">${escapeHTML(estadoTexto[v.estado_pago] || v.estado_pago)}</span>
           ${v.estado_pago === 'pendiente' ? `
-            <button class="btn-aprobar" onclick="aprobarVentaExtraida('${v.venta_id}')">✓</button>
-            <button class="btn-rechazar" onclick="rechazarVentaExtraida('${v.venta_id}')">✕</button>
+            <button class="btn-aprobar" data-admin-action="aprobar-extraida" data-id="${escapeHTML(v.venta_id)}">✓</button>
+            <button class="btn-rechazar" data-admin-action="rechazar-extraida" data-id="${escapeHTML(v.venta_id)}">✕</button>
           ` : ''}
         </div>
       </div>
@@ -284,18 +306,18 @@ async function cargarEventos() {
         <div class="sorteo-item">
           <div class="sorteo-item-top">
             <strong>${escapeHTML(s.nombre)} ${mod.tipo_boleta === 'rifa' ? '🎟️' : '🎱'}</strong>
-            <span class="badge ${badgeClaseEstado(s.estado)}">${s.estado}</span>
+            <span class="badge ${badgeClaseEstado(s.estado)}">${escapeHTML(s.estado)}</span>
           </div>
           <div style="font-size:12px;color:#888;margin-bottom:8px">
             ${escapeHTML(mod.nombre || 'Sin modalidad')} · ${mod.boletas_vendidas || 0}/${mod.total_boletas || 0} vendidas · ${formatCOP(mod.precio_boleta || 0)} c/u
             ${mod.permite_elegir_numero ? ' · elige número' : ''}
           </div>
           <div class="sorteo-item-acciones">
-            ${s.estado !== 'activo' ? `<button class="activar" onclick="cambiarEstado('${s.id}','activo')">Activar</button>` : ''}
-            ${s.estado === 'activo' ? `<button class="cerrar" onclick="cambiarEstado('${s.id}','cerrado')">Cerrar ventas</button>` : ''}
-            ${s.estado === 'cerrado' ? `<button onclick="cambiarEstado('${s.id}','finalizado')">Marcar finalizado</button>` : ''}
-            <button onclick="abrirModalEditar('${s.id}')">✏ Editar</button>
-            <button class="btn-eliminar-evento" onclick="eliminarEvento('${s.id}')">🗑 Eliminar</button>
+            ${s.estado !== 'activo' ? `<button class="activar" data-admin-action="cambiar-estado" data-id="${escapeHTML(s.id)}" data-estado="activo">Activar</button>` : ''}
+            ${s.estado === 'activo' ? `<button class="cerrar" data-admin-action="cambiar-estado" data-id="${escapeHTML(s.id)}" data-estado="cerrado">Cerrar ventas</button>` : ''}
+            ${s.estado === 'cerrado' ? `<button data-admin-action="cambiar-estado" data-id="${escapeHTML(s.id)}" data-estado="finalizado">Marcar finalizado</button>` : ''}
+            <button data-admin-action="editar-evento" data-id="${escapeHTML(s.id)}">✏ Editar</button>
+            <button class="btn-eliminar-evento" data-admin-action="eliminar-evento" data-id="${escapeHTML(s.id)}">🗑 Eliminar</button>
           </div>
         </div>
       `}).join('');
@@ -305,7 +327,7 @@ async function cargarEventos() {
     poblarSelectBoletas();
     poblarSelectExtraer();
   } catch (err) {
-    lista.innerHTML = `<div class="empty-pagos" style="color:#D85A30">Error cargando eventos: ${err.message}</div>`;
+    lista.innerHTML = `<div class="empty-pagos" style="color:#D85A30">Error cargando eventos: ${escapeHTML(err.message)}</div>`;
   }
 }
 
@@ -602,20 +624,20 @@ async function buscarBoletas() {
       return `
         <div class="boleta-row">
           <div>
-            <span class="num">${numerosTexto}</span>
-            <span style="color:#888"> · ${b.codigo_unico}</span>
+            <span class="num">${escapeHTML(numerosTexto)}</span>
+            <span style="color:#888"> · ${escapeHTML(b.codigo_unico)}</span>
           </div>
           <div style="text-align:right">
             ${b.vendido
-              ? `<div>${b.comprador_nombre || '—'} <span class="vendido">(${b.estado_pago || 'vendido'})</span></div>
-                 <div style="color:#888">${b.comprador_telefono || ''}</div>`
+              ? `<div>${escapeHTML(b.comprador_nombre || '—')} <span class="vendido">(${escapeHTML(b.estado_pago || 'vendido')})</span></div>
+                 <div style="color:#888">${escapeHTML(b.comprador_telefono || '')}</div>`
               : `<span class="libre">Disponible</span>`}
           </div>
         </div>
       `;
     }).join('');
   } catch (err) {
-    resultado.innerHTML = `<div class="empty-pagos" style="color:#D85A30">${err.message}</div>`;
+    resultado.innerHTML = `<div class="empty-pagos" style="color:#D85A30">${escapeHTML(err.message)}</div>`;
   }
 }
 
@@ -634,7 +656,9 @@ async function cargarMetricas() {
 
       document.getElementById('sorteo-info').innerHTML = activos.map(sorteo => {
         const mod = (sorteo.modalidades && sorteo.modalidades[0]) || {};
-        const pct = mod.total_boletas ? Math.round((mod.boletas_vendidas / mod.total_boletas) * 100) : 0;
+        const pct = mod.total_boletas
+          ? Math.max(0, Math.min(100, Math.round((mod.boletas_vendidas / mod.total_boletas) * 100)))
+          : 0;
         return `
           <div style="margin-bottom:14px;padding-bottom:14px;border-bottom:0.5px solid rgba(0,0,0,.06)">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -683,7 +707,7 @@ async function cargarPendientes() {
     }
 
     lista.innerHTML = ventas.map(v => `
-      <div class="pago-item" id="pago-${v.id}">
+      <div class="pago-item" id="pago-${escapeHTML(v.id)}">
         <div class="avatar">${escapeHTML(iniciales(v.comprador_nombre || ''))}</div>
         <div class="pago-meta">
           <strong>${escapeHTML(v.comprador_nombre)}</strong>
@@ -691,13 +715,13 @@ async function cargarPendientes() {
           <span style="display:block;color:#3C3489;font-weight:500">${formatCOP(v.total_pagado)}</span>
         </div>
         <div class="pago-acciones">
-          <button class="btn-action" onclick="verComprobante('${v.id}')" style="padding:6px 10px;font-size:12px">
+          <button class="btn-action" data-admin-action="ver-comprobante" data-id="${escapeHTML(v.id)}" style="padding:6px 10px;font-size:12px">
             👁 Ver
           </button>
-          <button class="btn-aprobar" onclick="aprobarVenta('${v.id}')">
+          <button class="btn-aprobar" data-admin-action="aprobar-venta" data-id="${escapeHTML(v.id)}">
             ✓
           </button>
-          <button class="btn-rechazar" onclick="rechazarVenta('${v.id}','')">
+          <button class="btn-rechazar" data-admin-action="rechazar-venta" data-id="${escapeHTML(v.id)}">
             ✕
           </button>
         </div>
@@ -705,7 +729,7 @@ async function cargarPendientes() {
     `).join('');
 
   } catch (err) {
-    lista.innerHTML = `<div class="empty-pagos" style="color:#D85A30">Error cargando pagos: ${err.message}</div>`;
+    lista.innerHTML = `<div class="empty-pagos" style="color:#D85A30">Error cargando pagos: ${escapeHTML(err.message)}</div>`;
   }
 }
 
@@ -818,12 +842,13 @@ async function verComprobante(id) {
     document.getElementById('modal-detalle').textContent =
       `${v.cantidad} boleta(s) · ${formatMetodo(v.metodo_pago)} · ${formatCOP(v.total_pagado)}`;
 
-    if (v.comprobante_url) {
+    const comprobanteUrl = safeCloudinaryUrl(v.comprobante_url);
+    if (comprobanteUrl) {
       if (v.comprobante_format === 'pdf' || /\.pdf(?:$|\?)/i.test(v.comprobante_url)) {
-        pdf.src = v.comprobante_url;
+        pdf.src = comprobanteUrl;
         pdf.style.display = 'block';
       } else {
-        img.src = v.comprobante_url;
+        img.src = comprobanteUrl;
         img.style.display = 'block';
       }
     }
@@ -919,7 +944,17 @@ function escapeHTML(value) {
 }
 
 function formatMetodo(m) {
-  return { nequi: 'Nequi', bancolombia: 'Bancolombia', transferencia: 'Transferencia' }[m] || m;
+  return { nequi: 'Nequi', bancolombia: 'Bancolombia', transferencia: 'Transferencia' }[m] || 'Otro';
+}
+
+function safeCloudinaryUrl(value) {
+  if (!value) return '';
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && url.hostname === 'res.cloudinary.com' ? url.href : '';
+  } catch {
+    return '';
+  }
 }
 
 function tiempoRelativo(iso) {
