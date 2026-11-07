@@ -5,6 +5,10 @@
 let tokenAdmin   = null;
 let ventaModal   = null;
 let todosLosEventos = [];
+let pendientesOffset = 0;
+let pendientesTotal = 0;
+let pendientesCache = [];
+const PENDIENTES_POR_PAGINA = 50;
 
 document.addEventListener('DOMContentLoaded', () => {
   const tokenGuardado  = sessionStorage.getItem('admin_token');
@@ -17,6 +21,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function inicializarEventos() {
+  document.addEventListener('click', manejarAccionDelegada);
+
   document.getElementById('btn-login').addEventListener('click', hacerLogin);
   document.getElementById('login-pass').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') hacerLogin();
@@ -30,6 +36,8 @@ function inicializarEventos() {
   });
 
   document.getElementById('btn-recargar').addEventListener('click', cargarDatos);
+  document.getElementById('btn-pagos-anterior').addEventListener('click', () => cambiarPaginaPendientes(-1));
+  document.getElementById('btn-pagos-siguiente').addEventListener('click', () => cambiarPaginaPendientes(1));
 
   document.getElementById('btn-toggle-form').addEventListener('click', () => {
     const form = document.getElementById('form-sorteo');
@@ -98,6 +106,26 @@ function inicializarEventos() {
   document.getElementById('extraidas-buscar').addEventListener('input', renderExtraidas);
 }
 
+function manejarAccionDelegada(event) {
+  const boton = event.target.closest('[data-admin-action]');
+  if (!boton) return;
+
+  const id = boton.dataset.id;
+  switch (boton.dataset.adminAction) {
+    case 'aprobar-extraida': return aprobarVentaExtraida(id);
+    case 'rechazar-extraida': return rechazarVentaExtraida(id);
+    case 'cambiar-estado': return cambiarEstado(id, boton.dataset.estado);
+    case 'editar-evento': return abrirModalEditar(id);
+    case 'eliminar-evento': return eliminarEvento(id);
+    case 'ver-comprobante': return verComprobante(id);
+    case 'aprobar-venta': return aprobarVenta(id);
+    case 'rechazar-venta': {
+      const notas = prompt('Motivo del rechazo (opcional):') || '';
+      return rechazarVenta(id, notas);
+    }
+  }
+}
+
 async function hacerLogin() {
   const email    = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-pass').value;
@@ -147,7 +175,7 @@ function poblarSelectExtraer() {
   select.innerHTML = todosLosEventos.map(s => {
     const mod = (s.modalidades && s.modalidades[0]) || {};
     const disponibles = (mod.total_boletas || 0) - (mod.boletas_vendidas || 0);
-    return `<option value="${mod.id || ''}" data-sorteo-id="${s.id}">${s.nombre} — ${mod.nombre || ''} (${disponibles} disp.)</option>`;
+    return `<option value="${escapeHTML(mod.id || '')}" data-sorteo-id="${escapeHTML(s.id)}">${escapeHTML(s.nombre)} — ${escapeHTML(mod.nombre || '')} (${disponibles} disp.)</option>`;
   }).join('');
 }
 
@@ -193,7 +221,7 @@ async function cargarBoletasExtraidas() {
     todasLasExtraidas = await Api.getBoletasExtraidas(tokenAdmin);
     renderExtraidas();
   } catch (err) {
-    lista.innerHTML = `<div class="empty-pagos" style="color:#D85A30">${err.message}</div>`;
+    lista.innerHTML = `<div class="empty-pagos" style="color:#D85A30">${escapeHTML(err.message)}</div>`;
   }
 }
 
@@ -223,15 +251,15 @@ function renderExtraidas() {
     return `
       <div class="boleta-row" style="padding:10px">
         <div>
-          <span class="num">${numTexto}</span>
-          <span style="color:#888"> · ${v.codigo_unico || ''}</span>
-          <div style="color:#888;font-size:11px">${v.comprador_telefono} · ${tiempoRelativo(v.creado_en)}</div>
+          <span class="num">${escapeHTML(numTexto)}</span>
+          <span style="color:#888"> · ${escapeHTML(v.codigo_unico || '')}</span>
+          <div style="color:#888;font-size:11px">${escapeHTML(v.comprador_telefono)} · ${tiempoRelativo(v.creado_en)}</div>
         </div>
         <div style="display:flex;align-items:center;gap:6px">
-          <span class="badge ${badgeClaseEstado(v.estado_pago === 'aprobado' ? 'activo' : v.estado_pago === 'rechazado' ? 'cerrado' : 'borrador')}">${estadoTexto[v.estado_pago] || v.estado_pago}</span>
+          <span class="badge ${badgeClaseEstado(v.estado_pago === 'aprobado' ? 'activo' : v.estado_pago === 'rechazado' ? 'cerrado' : 'borrador')}">${escapeHTML(estadoTexto[v.estado_pago] || v.estado_pago)}</span>
           ${v.estado_pago === 'pendiente' ? `
-            <button class="btn-aprobar" onclick="aprobarVentaExtraida('${v.venta_id}')">✓</button>
-            <button class="btn-rechazar" onclick="rechazarVentaExtraida('${v.venta_id}')">✕</button>
+            <button class="btn-aprobar" data-admin-action="aprobar-extraida" data-id="${escapeHTML(v.venta_id)}">✓</button>
+            <button class="btn-rechazar" data-admin-action="rechazar-extraida" data-id="${escapeHTML(v.venta_id)}">✕</button>
           ` : ''}
         </div>
       </div>
@@ -277,19 +305,19 @@ async function cargarEventos() {
         return `
         <div class="sorteo-item">
           <div class="sorteo-item-top">
-            <strong>${s.nombre} ${mod.tipo_boleta === 'rifa' ? '🎟️' : '🎱'}</strong>
-            <span class="badge ${badgeClaseEstado(s.estado)}">${s.estado}</span>
+            <strong>${escapeHTML(s.nombre)} ${mod.tipo_boleta === 'rifa' ? '🎟️' : '🎱'}</strong>
+            <span class="badge ${badgeClaseEstado(s.estado)}">${escapeHTML(s.estado)}</span>
           </div>
           <div style="font-size:12px;color:#888;margin-bottom:8px">
-            ${mod.nombre || 'Sin modalidad'} · ${mod.boletas_vendidas || 0}/${mod.total_boletas || 0} vendidas · ${formatCOP(mod.precio_boleta || 0)} c/u
+            ${escapeHTML(mod.nombre || 'Sin modalidad')} · ${mod.boletas_vendidas || 0}/${mod.total_boletas || 0} vendidas · ${formatCOP(mod.precio_boleta || 0)} c/u
             ${mod.permite_elegir_numero ? ' · elige número' : ''}
           </div>
           <div class="sorteo-item-acciones">
-            ${s.estado !== 'activo' ? `<button class="activar" onclick="cambiarEstado('${s.id}','activo')">Activar</button>` : ''}
-            ${s.estado === 'activo' ? `<button class="cerrar" onclick="cambiarEstado('${s.id}','cerrado')">Cerrar ventas</button>` : ''}
-            ${s.estado === 'cerrado' ? `<button onclick="cambiarEstado('${s.id}','finalizado')">Marcar finalizado</button>` : ''}
-            <button onclick="abrirModalEditar('${s.id}')">✏ Editar</button>
-            <button class="btn-eliminar-evento" onclick="eliminarEvento('${s.id}')">🗑 Eliminar</button>
+            ${s.estado !== 'activo' ? `<button class="activar" data-admin-action="cambiar-estado" data-id="${escapeHTML(s.id)}" data-estado="activo">Activar</button>` : ''}
+            ${s.estado === 'activo' ? `<button class="cerrar" data-admin-action="cambiar-estado" data-id="${escapeHTML(s.id)}" data-estado="cerrado">Cerrar ventas</button>` : ''}
+            ${s.estado === 'cerrado' ? `<button data-admin-action="cambiar-estado" data-id="${escapeHTML(s.id)}" data-estado="finalizado">Marcar finalizado</button>` : ''}
+            <button data-admin-action="editar-evento" data-id="${escapeHTML(s.id)}">✏ Editar</button>
+            <button class="btn-eliminar-evento" data-admin-action="eliminar-evento" data-id="${escapeHTML(s.id)}">🗑 Eliminar</button>
           </div>
         </div>
       `}).join('');
@@ -299,7 +327,7 @@ async function cargarEventos() {
     poblarSelectBoletas();
     poblarSelectExtraer();
   } catch (err) {
-    lista.innerHTML = `<div class="empty-pagos" style="color:#D85A30">Error cargando eventos: ${err.message}</div>`;
+    lista.innerHTML = `<div class="empty-pagos" style="color:#D85A30">Error cargando eventos: ${escapeHTML(err.message)}</div>`;
   }
 }
 
@@ -460,7 +488,7 @@ function poblarSelectCartones() {
 
   select.innerHTML = todosLosEventos.map(s => {
     const mod = (s.modalidades && s.modalidades[0]) || {};
-    return `<option value="${mod.id || ''}" data-sorteo-id="${s.id}">${s.nombre} — ${mod.nombre || ''} (${s.estado})</option>`;
+    return `<option value="${escapeHTML(mod.id || '')}" data-sorteo-id="${escapeHTML(s.id)}">${escapeHTML(s.nombre)} — ${escapeHTML(mod.nombre || '')} (${escapeHTML(s.estado)})</option>`;
   }).join('');
 
   if (seleccionPrevia && [...select.options].some(o => o.value === seleccionPrevia)) {
@@ -563,7 +591,7 @@ function poblarSelectBoletas() {
   }
 
   select.innerHTML = todosLosEventos.map(s =>
-    `<option value="${s.id}">${s.nombre} (${s.estado})</option>`
+    `<option value="${escapeHTML(s.id)}">${escapeHTML(s.nombre)} (${escapeHTML(s.estado)})</option>`
   ).join('');
 
   if (seleccionPrevia && [...select.options].some(o => o.value === seleccionPrevia)) {
@@ -596,20 +624,20 @@ async function buscarBoletas() {
       return `
         <div class="boleta-row">
           <div>
-            <span class="num">${numerosTexto}</span>
-            <span style="color:#888"> · ${b.codigo_unico}</span>
+            <span class="num">${escapeHTML(numerosTexto)}</span>
+            <span style="color:#888"> · ${escapeHTML(b.codigo_unico)}</span>
           </div>
           <div style="text-align:right">
             ${b.vendido
-              ? `<div>${b.comprador_nombre || '—'} <span class="vendido">(${b.estado_pago || 'vendido'})</span></div>
-                 <div style="color:#888">${b.comprador_telefono || ''}</div>`
+              ? `<div>${escapeHTML(b.comprador_nombre || '—')} <span class="vendido">(${escapeHTML(b.estado_pago || 'vendido')})</span></div>
+                 <div style="color:#888">${escapeHTML(b.comprador_telefono || '')}</div>`
               : `<span class="libre">Disponible</span>`}
           </div>
         </div>
       `;
     }).join('');
   } catch (err) {
-    resultado.innerHTML = `<div class="empty-pagos" style="color:#D85A30">${err.message}</div>`;
+    resultado.innerHTML = `<div class="empty-pagos" style="color:#D85A30">${escapeHTML(err.message)}</div>`;
   }
 }
 
@@ -628,11 +656,13 @@ async function cargarMetricas() {
 
       document.getElementById('sorteo-info').innerHTML = activos.map(sorteo => {
         const mod = (sorteo.modalidades && sorteo.modalidades[0]) || {};
-        const pct = mod.total_boletas ? Math.round((mod.boletas_vendidas / mod.total_boletas) * 100) : 0;
+        const pct = mod.total_boletas
+          ? Math.max(0, Math.min(100, Math.round((mod.boletas_vendidas / mod.total_boletas) * 100)))
+          : 0;
         return `
           <div style="margin-bottom:14px;padding-bottom:14px;border-bottom:0.5px solid rgba(0,0,0,.06)">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-              <strong style="font-size:15px">${sorteo.nombre}</strong>
+          <strong style="font-size:15px">${escapeHTML(sorteo.nombre)}</strong>
               <span class="badge badge-approved">Activo</span>
             </div>
             <div class="progress-wrap">
@@ -657,7 +687,19 @@ async function cargarMetricas() {
 async function cargarPendientes() {
   const lista = document.getElementById('pagos-lista');
   try {
-    const ventas = await Api.getVentasPendientes(tokenAdmin);
+    const pagina = await Api.getVentasPendientes(tokenAdmin, pendientesOffset);
+    pendientesTotal = pagina.total;
+    if (!pagina.ventas.length && pendientesOffset > 0 && pendientesTotal > 0) {
+      pendientesOffset = Math.floor((pendientesTotal - 1) / PENDIENTES_POR_PAGINA) * PENDIENTES_POR_PAGINA;
+      return cargarPendientes();
+    }
+    pendientesCache = pagina.ventas;
+    const ventas = pendientesCache;
+    const inicio = pendientesTotal ? pendientesOffset + 1 : 0;
+    const fin = Math.min(pendientesOffset + ventas.length, pendientesTotal);
+    document.getElementById('pagos-pagina').textContent = `${inicio}-${fin} de ${pendientesTotal}`;
+    document.getElementById('btn-pagos-anterior').disabled = pendientesOffset === 0;
+    document.getElementById('btn-pagos-siguiente').disabled = pendientesOffset + ventas.length >= pendientesTotal;
 
     if (!ventas.length) {
       lista.innerHTML = '<div class="empty-pagos">✅ No hay pagos pendientes</div>';
@@ -665,21 +707,21 @@ async function cargarPendientes() {
     }
 
     lista.innerHTML = ventas.map(v => `
-      <div class="pago-item" id="pago-${v.id}">
-        <div class="avatar">${iniciales(v.comprador_nombre)}</div>
+      <div class="pago-item" id="pago-${escapeHTML(v.id)}">
+        <div class="avatar">${escapeHTML(iniciales(v.comprador_nombre || ''))}</div>
         <div class="pago-meta">
-          <strong>${v.comprador_nombre}</strong>
+          <strong>${escapeHTML(v.comprador_nombre)}</strong>
           <span>${v.cantidad} boleta(s) · ${formatMetodo(v.metodo_pago)} · ${tiempoRelativo(v.creado_en)}</span>
           <span style="display:block;color:#3C3489;font-weight:500">${formatCOP(v.total_pagado)}</span>
         </div>
         <div class="pago-acciones">
-          <button class="btn-action" onclick="verComprobante('${v.id}')" style="padding:6px 10px;font-size:12px">
+          <button class="btn-action" data-admin-action="ver-comprobante" data-id="${escapeHTML(v.id)}" style="padding:6px 10px;font-size:12px">
             👁 Ver
           </button>
-          <button class="btn-aprobar" onclick="aprobarVenta('${v.id}')">
+          <button class="btn-aprobar" data-admin-action="aprobar-venta" data-id="${escapeHTML(v.id)}">
             ✓
           </button>
-          <button class="btn-rechazar" onclick="rechazarVenta('${v.id}','')">
+          <button class="btn-rechazar" data-admin-action="rechazar-venta" data-id="${escapeHTML(v.id)}">
             ✕
           </button>
         </div>
@@ -687,8 +729,15 @@ async function cargarPendientes() {
     `).join('');
 
   } catch (err) {
-    lista.innerHTML = `<div class="empty-pagos" style="color:#D85A30">Error cargando pagos: ${err.message}</div>`;
+    lista.innerHTML = `<div class="empty-pagos" style="color:#D85A30">Error cargando pagos: ${escapeHTML(err.message)}</div>`;
   }
+}
+
+function cambiarPaginaPendientes(direccion) {
+  const siguienteOffset = pendientesOffset + direccion * PENDIENTES_POR_PAGINA;
+  if (siguienteOffset < 0 || siguienteOffset >= pendientesTotal) return;
+  pendientesOffset = siguienteOffset;
+  cargarPendientes();
 }
 
 async function aprobarVenta(id) {
@@ -697,12 +746,7 @@ async function aprobarVenta(id) {
     await Api.aprobarVenta(id, tokenAdmin);
     cerrarModal();
     mostrarToast('✓ Venta aprobada. Boleta asignada correctamente.', 'success');
-    document.getElementById(`pago-${id}`)?.remove();
-    if (!document.querySelectorAll('.pago-item').length) {
-      document.getElementById('pagos-lista').innerHTML =
-        '<div class="empty-pagos">✅ No hay pagos pendientes</div>';
-    }
-    cargarMetricas();
+    await Promise.all([cargarPendientes(), cargarMetricas()]);
   } catch (err) {
     mostrarToast(err.message, 'error');
   }
@@ -714,8 +758,7 @@ async function rechazarVenta(id, notas) {
     await Api.rechazarVenta(id, notas, tokenAdmin);
     cerrarModal();
     mostrarToast('Venta rechazada.', 'warning');
-    document.getElementById(`pago-${id}`)?.remove();
-    cargarMetricas();
+    await Promise.all([cargarPendientes(), cargarMetricas()]);
   } catch (err) {
     mostrarToast(err.message, 'error');
   }
@@ -784,26 +827,30 @@ async function verComprobante(id) {
   document.getElementById('modal-titulo').textContent  = 'Cargando...';
   document.getElementById('modal-detalle').textContent = '';
   const img = document.getElementById('modal-img');
+  const pdf = document.getElementById('modal-pdf');
   img.style.display = 'none';
   img.src = '';
+  pdf.style.display = 'none';
+  pdf.src = 'about:blank';
   document.getElementById('modal-validacion')?.remove();
 
   try {
-    const token = sessionStorage.getItem('admin_token');
-    const res = await fetch(`${API_URL}/admin/ventas-pendientes`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const ventas = await res.json();
-    const v = ventas.find(venta => venta.id === id);
+    const v = pendientesCache.find(venta => venta.id === id);
     if (!v) return;
 
     document.getElementById('modal-titulo').textContent  = v.comprador_nombre;
     document.getElementById('modal-detalle').textContent =
       `${v.cantidad} boleta(s) · ${formatMetodo(v.metodo_pago)} · ${formatCOP(v.total_pagado)}`;
 
-    if (v.comprobante_url) {
-      img.src = v.comprobante_url;
-      img.style.display = 'block';
+    const comprobanteUrl = safeCloudinaryUrl(v.comprobante_url);
+    if (comprobanteUrl) {
+      if (v.comprobante_format === 'pdf' || /\.pdf(?:$|\?)/i.test(v.comprobante_url)) {
+        pdf.src = comprobanteUrl;
+        pdf.style.display = 'block';
+      } else {
+        img.src = comprobanteUrl;
+        img.style.display = 'block';
+      }
     }
 
     const alertaMonto = v.monto_declarado &&
@@ -855,7 +902,7 @@ async function verComprobante(id) {
                         padding:6px 0;border-bottom:0.5px solid #E8E6DF">
               <span style="color:#888">${f.icon} ${f.label}:</span>
               <strong style="${f.color ? `color:${f.color}` : 'color:#2C2C2A'}">
-                ${f.valor}
+                ${escapeHTML(f.valor)}
               </strong>
             </div>
           `).join('')}
@@ -868,7 +915,7 @@ async function verComprobante(id) {
         ` : hayDatosOCR ? `
           <div style="background:#E1F5EE;border-radius:6px;padding:8px;
                       margin-top:10px;font-size:12px;color:#085041">
-            ✓ Verifica la referencia <strong>${v.referencia_pago || '—'}</strong>
+            ✓ Verifica la referencia <strong>${escapeHTML(v.referencia_pago || '—')}</strong>
             en tu app ${formatMetodo(v.metodo_pago)} y aprueba si es correcto.
           </div>
         ` : ''}
@@ -882,15 +929,32 @@ async function verComprobante(id) {
 function cerrarModal() {
   document.getElementById('modal').style.display = 'none';
   document.getElementById('modal-validacion')?.remove();
+  document.getElementById('modal-pdf').src = 'about:blank';
   ventaModal = null;
 }
 
 function iniciales(nombre) {
-  return nombre.split(' ').slice(0,2).map(p => p[0]).join('').toUpperCase();
+  return String(nombre || '').split(' ').slice(0,2).map(p => p[0]).join('').toUpperCase();
+}
+
+function escapeHTML(value) {
+  const element = document.createElement('span');
+  element.textContent = String(value ?? '');
+  return element.innerHTML;
 }
 
 function formatMetodo(m) {
-  return { nequi: 'Nequi', bancolombia: 'Bancolombia', transferencia: 'Transferencia' }[m] || m;
+  return { nequi: 'Nequi', bancolombia: 'Bancolombia', transferencia: 'Transferencia' }[m] || 'Otro';
+}
+
+function safeCloudinaryUrl(value) {
+  if (!value) return '';
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && url.hostname === 'res.cloudinary.com' ? url.href : '';
+  } catch {
+    return '';
+  }
 }
 
 function tiempoRelativo(iso) {
@@ -920,7 +984,7 @@ function mostrarToast(msg, tipo = 'success') {
     box-shadow:0 8px 28px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.08) inset;
     max-width:90vw;text-align:center;display:flex;align-items:center;gap:10px;
     animation:toastIn .25s ease-out`;
-  t.innerHTML = `<span style="font-size:16px">${e.icon}</span><span>${msg}</span>`;
+  t.innerHTML = `<span style="font-size:16px">${e.icon}</span><span>${escapeHTML(msg)}</span>`;
   document.body.appendChild(t);
 
   if (!document.getElementById('toast-anim-style')) {

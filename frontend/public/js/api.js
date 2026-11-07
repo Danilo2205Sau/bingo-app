@@ -3,7 +3,11 @@
 // Todas las llamadas al backend van por aquí
 // ============================================
 
-const API_URL = 'https://bingo-app-production-9452.up.railway.app/api'; // Cambiar en producción
+const API_URL = (window.BINGO_API_URL || (
+  window.location.protocol === 'file:' || ['localhost', '127.0.0.1'].includes(window.location.hostname)
+    ? 'http://localhost:3000/api'
+    : 'https://bingo-app-production-9452.up.railway.app/api'
+)).replace(/\/$/, '');
 
 const Api = {
 
@@ -48,8 +52,10 @@ const Api = {
     return data;
   },
 
-  async getVenta(id) {
-    const res = await fetch(`${API_URL}/ventas/${id}`);
+  async getVenta(id, codigoConsulta) {
+    const res = await fetch(`${API_URL}/ventas/${id}`, {
+      headers: { 'X-Consulta-Token': codigoConsulta },
+    });
     if (!res.ok) throw new Error('Venta no encontrada');
     return res.json();
   },
@@ -82,12 +88,13 @@ const Api = {
     return res.json();
   },
 
-  async getVentasPendientes(token) {
-    const res = await fetch(`${API_URL}/admin/ventas-pendientes`, {
+  async getVentasPendientes(token, offset = 0) {
+    const res = await fetch(`${API_URL}/admin/ventas-pendientes?limit=50&offset=${offset}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) throw new Error('No autorizado');
-    return res.json();
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'No autorizado');
+    return data;
   },
 
   async aprobarVenta(id, token) {

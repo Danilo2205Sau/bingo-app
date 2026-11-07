@@ -9,9 +9,7 @@ const { getApp, limpiarBD, crearAdmin, tokenAdmin, crearSorteo } = require('./he
 let app, admin, token;
 
 beforeAll(async () => {
-  app   = getApp();
-  admin = await crearAdmin();
-  token = tokenAdmin(admin);
+  app = getApp();
 });
 
 beforeEach(async () => {
@@ -19,11 +17,6 @@ beforeEach(async () => {
   // Recrear admin (se borró en limpiarBD)
   admin = await crearAdmin();
   token = tokenAdmin(admin);
-});
-
-afterAll(async () => {
-  const db = require('../src/config/db');
-  await db.pool.end();
 });
 
 // ── Endpoint público ──────────────────────────────────────────
@@ -54,7 +47,8 @@ describe('POST /api/sorteos', () => {
     nombre:           'Bingo Navidad',
     fecha_sorteo:     new Date(Date.now() + 86400000).toISOString(),
     precio_boleta:    5000,
-    total_cartones:   100,
+    total_boletas:    100,
+    tipo_boleta:      'bingo',
     premio_descripcion: '$10.000.000',
   };
 
@@ -66,7 +60,8 @@ describe('POST /api/sorteos', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.nombre).toBe('Bingo Navidad');
-    expect(res.body.estado).toBe('borrador');
+    expect(res.body.estado).toBe('activo');
+    expect(res.body.modalidades).toHaveLength(1);
   });
 
   test('❌ falla sin token', async () => {
@@ -85,13 +80,13 @@ describe('POST /api/sorteos', () => {
 });
 
 // ── Cambiar estado ────────────────────────────────────────────
-describe('PATCH /api/sorteos/:id/estado', () => {
+describe('PATCH /api/sorteos/:id', () => {
 
   test('✅ admin puede activar un sorteo', async () => {
     const sorteo = await crearSorteo({ estado: 'borrador' });
 
     const res = await request(app)
-      .patch(`/api/sorteos/${sorteo.id}/estado`)
+      .patch(`/api/sorteos/${sorteo.id}`)
       .set('Authorization', `Bearer ${token}`)
       .send({ estado: 'activo' });
 
@@ -103,7 +98,7 @@ describe('PATCH /api/sorteos/:id/estado', () => {
     const sorteo = await crearSorteo();
 
     const res = await request(app)
-      .patch(`/api/sorteos/${sorteo.id}/estado`)
+      .patch(`/api/sorteos/${sorteo.id}`)
       .set('Authorization', `Bearer ${token}`)
       .send({ estado: 'inexistente' });
 

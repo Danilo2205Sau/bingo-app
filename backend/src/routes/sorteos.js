@@ -3,6 +3,7 @@ const db          = require('../config/db');
 const auth        = require('../middleware/auth');
 const uploadPremio = require('../middleware/uploadPremio');
 const { generarBoleta, generarCodigo } = require('../services/ticketGenerator');
+const { subirArchivo } = require('../services/cloudinary');
 
 // ── PÚBLICO ──────────────────────────────────────────────────────
 
@@ -116,6 +117,10 @@ router.post('/', auth, uploadPremio.single('imagen_premio'), async (req, res, ne
       });
     }
 
+    const imagenPremio = req.file
+      ? await subirArchivo(req.file, { folder: 'bingo/premios' })
+      : null;
+
     await client.query('BEGIN');
 
     const { rows: sorteoRows } = await client.query(`
@@ -126,7 +131,7 @@ router.post('/', auth, uploadPremio.single('imagen_premio'), async (req, res, ne
       RETURNING *
     `, [
       nombre, descripcion || null, fecha_sorteo, premio_descripcion || null,
-      req.file ? req.file.path : null, descripcion_premio || null,
+      imagenPremio?.secure_url || null, descripcion_premio || null,
     ]);
     const sorteo = sorteoRows[0];
 
@@ -157,6 +162,12 @@ router.post('/', auth, uploadPremio.single('imagen_premio'), async (req, res, ne
 router.patch('/:id', auth, uploadPremio.single('imagen_premio'), async (req, res, next) => {
   try {
     const { nombre, descripcion, fecha_sorteo, premio_descripcion, descripcion_premio, estado } = req.body;
+    if (estado !== undefined && !['borrador', 'activo', 'cerrado', 'finalizado', 'cancelado'].includes(estado)) {
+      return res.status(400).json({ error: 'El estado del evento no es válido' });
+    }
+    const imagenPremio = req.file
+      ? await subirArchivo(req.file, { folder: 'bingo/premios' })
+      : null;
 
     const { rows } = await db.query(`
       UPDATE sorteos SET
@@ -172,7 +183,7 @@ router.patch('/:id', auth, uploadPremio.single('imagen_premio'), async (req, res
       RETURNING *
     `, [
       nombre, descripcion, fecha_sorteo, premio_descripcion, descripcion_premio,
-      estado, req.file ? req.file.path : null, req.params.id,
+      estado, imagenPremio?.secure_url || null, req.params.id,
     ]);
 
     if (!rows.length) return res.status(404).json({ error: 'Evento no encontrado' });

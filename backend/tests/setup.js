@@ -5,32 +5,23 @@
 // ─────────────────────────────────────────────────────────────
 
 // Variables de entorno de prueba
-process.env.NODE_ENV      = 'test';
-process.env.PORT          = '3001';
-process.env.DATABASE_URL  = 'postgresql://bingo_user:bingo_pass@localhost:5432/bingo_test';
-process.env.JWT_SECRET    = 'secreto_de_prueba_12345678901234567890';
-process.env.JWT_EXPIRES_IN = '1h';
-
-// ── Mock Twilio ───────────────────────────────────────────────
-jest.mock('twilio', () => {
-  return () => ({
-    messages: {
-      create: jest.fn().mockResolvedValue({ sid: 'SM_test_123' }),
-    },
-  });
-});
+process.env.NODE_ENV       = 'test';
+process.env.PORT          ||= '3001';
+process.env.DATABASE_URL  ||= 'postgresql://localhost:5432/bingo_test';
+process.env.JWT_SECRET    ||= require('crypto').randomBytes(32).toString('hex');
+process.env.JWT_EXPIRES_IN ||= '1h';
 
 // ── Mock Cloudinary ───────────────────────────────────────────
 jest.mock('../src/services/cloudinary', () => ({
   subirBuffer:         jest.fn().mockResolvedValue('https://res.cloudinary.com/test/carton.pdf'),
-  storageComprobantes: {
-    _handleFile:  (_req, file, cb) => cb(null, { path: 'https://cloudinary.com/test/comprobante.jpg' }),
-    _removeFile:  (_req, _file, cb) => cb(null),
-  },
-  storagePDFs: {
-    _handleFile:  (_req, file, cb) => cb(null, { path: 'https://cloudinary.com/test/pdf.pdf' }),
-    _removeFile:  (_req, _file, cb) => cb(null),
-  },
+  subirArchivo:       jest.fn().mockResolvedValue({
+    secure_url: 'https://res.cloudinary.com/test/private_comprobante.jpg',
+    public_id: 'bingo/comprobantes/test',
+    resource_type: 'image',
+    format: 'jpg',
+  }),
+  eliminarArchivo:    jest.fn().mockResolvedValue({ result: 'ok' }),
+  urlPrivada:         jest.fn().mockReturnValue('https://res.cloudinary.com/test/private_comprobante.jpg'),
   cloudinary: { config: jest.fn() },
 }));
 

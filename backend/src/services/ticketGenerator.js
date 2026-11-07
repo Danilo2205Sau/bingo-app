@@ -3,6 +3,8 @@
 // (bingo: matriz 5x5 clásica | rifa: números configurables)
 // ============================================
 
+const { randomInt } = require('crypto');
+
 function generarBoleta(modalidad, indiceSecuencial = 0) {
   if (modalidad.tipo_boleta === 'rifa') {
     const numeros = generarNumerosRifa(modalidad.config || {}, indiceSecuencial);
@@ -31,17 +33,36 @@ function generarMatrizBingo() {
 // ── Rifa/sorteo: N números de D dígitos, configurable por modalidad ──
 // config = { cantidad_numeros: 1, digitos: 3, modo: 'aleatorio' | 'secuencial' }
 function generarNumerosRifa(config, indiceSecuencial = 0) {
-  const cantidad = config.cantidad_numeros || 1;
-  const digitos  = config.digitos || 3;
+  const cantidad = Number(config.cantidad_numeros || 1);
+  const digitos  = Number(config.digitos || 3);
   const modo     = config.modo || 'aleatorio';
+  if (!Number.isSafeInteger(cantidad) || cantidad < 1 || cantidad > 100 ||
+      !Number.isSafeInteger(digitos) || digitos < 1 || digitos > 12) {
+    const error = new Error('La configuración de números de la rifa no es válida');
+    error.code = 'INVALID_RAFFLE_CONFIG';
+    throw error;
+  }
 
   const numeros = [];
+  const max = Math.pow(10, digitos);
+  if (cantidad > max) {
+    const error = new Error('La cantidad de números supera el rango configurado para la rifa');
+    error.code = 'INVALID_RAFFLE_CONFIG';
+    throw error;
+  }
+  if (modo === 'secuencial' && (indiceSecuencial + 1) * cantidad > max) {
+    const error = new Error('La rifa secuencial agotó el rango de números configurado');
+    error.code = 'RAFFLE_NUMBERS_EXHAUSTED';
+    throw error;
+  }
   for (let i = 0; i < cantidad; i++) {
     if (modo === 'secuencial') {
-      numeros.push(String(indiceSecuencial).padStart(digitos, '0'));
+      numeros.push(String(indiceSecuencial * cantidad + i).padStart(digitos, '0'));
     } else {
-      const max = Math.pow(10, digitos);
-      numeros.push(String(Math.floor(Math.random() * max)).padStart(digitos, '0'));
+      let numero;
+      do { numero = randomInt(max); }
+      while (numeros.includes(String(numero).padStart(digitos, '0')));
+      numeros.push(String(numero).padStart(digitos, '0'));
     }
   }
   return numeros;
@@ -55,7 +76,7 @@ function range(min, max) {
 
 function shuffle(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = randomInt(i + 1);
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
@@ -64,7 +85,7 @@ function shuffle(arr) {
 function generarCodigo() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let codigo = '';
-  for (let i = 0; i < 8; i++) codigo += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < 8; i++) codigo += chars[randomInt(chars.length)];
   return codigo;
 }
 

@@ -139,12 +139,5 @@ CREATE TRIGGER trigger_contar_ventas
 AFTER INSERT ON venta_cartones
 FOR EACH ROW EXECUTE FUNCTION actualizar_contador_ventas();
 
--- -----------------------------------------------
--- Admin inicial (contraseña: cambiar en producción)
--- Hash de 'admin123' con bcrypt rounds=12
--- -----------------------------------------------
-INSERT INTO admins (nombre, email, password_hash) VALUES (
-  'Administrador',
-  'admin@bingo.com',
-  '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewDGIL9EjVUXQFVm'
-);
+-- El primer administrador se crea con `npm run admin:create` después de
+-- configurar ADMIN_EMAIL y ADMIN_PASSWORD. No se instala una contraseña pública.

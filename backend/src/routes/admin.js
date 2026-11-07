@@ -1,19 +1,33 @@
 const router  = require('express').Router();
 const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 const db      = require('../config/db');
 const auth    = require('../middleware/auth');
 const { asignarCartonesAVenta } = require('../services/asignacion');
+const { urlPrivada } = require('../services/cloudinary');
+const loginRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos. Intenta de nuevo en 15 minutos.' },
+});
 
 // POST /api/admin/login
-router.post('/login', async (req, res, next) => {
+router.post('/login', loginRateLimit, async (req, res, next) => {
   try {
     const { email, password } = req.body;
     if (!email || !password)
       return res.status(400).json({ error: 'Email y contraseña requeridos' });
 
+    const emailNormalizado = String(email).trim().toLowerCase();
+    if (emailNormalizado === 'admin@bingo.com') {
+      return res.status(401).json({ error: 'Credenciales incorrectas' });
+    }
+
     const { rows } = await db.query(
-      'SELECT * FROM admins WHERE email = $1', [email]
+      'SELECT * FROM admins WHERE lower(email) = $1', [emailNormalizado]
     );
     const admin = rows[0];
 
@@ -38,7 +52,7 @@ router.get('/dashboard', auth, async (req, res, next) => {
                 FROM ventas WHERE estado_pago = 'aprobado'`),
       db.query(`SELECT COUNT(*) AS vendidas FROM venta_cartones`),
       db.query(`SELECT COUNT(DISTINCT comprador_id) AS total FROM ventas`),
-      db.query(`SELECT COUNT(*) AS pendientes FROM ventas WHERE estado_pago = 'pendiente'`),
+      db.query(`SELECT COUNT(*) AS pendientes FROM ventas WHERE estado_pago IN ('pendiente','en_revision')`),
     ]);
 
     res.json({
@@ -53,9 +67,27 @@ router.get('/dashboard', auth, async (req, res, next) => {
 // GET /api/admin/ventas-pendientes
 router.get('/ventas-pendientes', auth, async (req, res, next) => {
   try {
+    const limitText = req.query.limit === undefined ? '50' : String(req.query.limit);
+    const offsetText = req.query.offset === undefined ? '0' : String(req.query.offset);
+    if (!/^\d+$/.test(limitText) || !/^\d+$/.test(offsetText)) {
+      return res.status(400).json({ error: 'La página solicitada no es válida' });
+    }
+    const limit = Number(limitText);
+    const offset = Number(offsetText);
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100 ||
+        !Number.isSafeInteger(offset) || offset > 1000000) {
+      return res.status(400).json({ error: 'La página solicitada está fuera del rango permitido' });
+    }
+
+    const countResult = await db.query(`
+      SELECT COUNT(*)::int AS total
+      FROM ventas
+      WHERE estado_pago IN ('pendiente','en_revision') AND es_administrador = false
+    `);
     const { rows } = await db.query(`
      SELECT v.id, v.cantidad, v.total_pagado, v.metodo_pago,
              v.comprobante_url, v.creado_en, v.estado_pago,
+             v.comprobante_public_id, v.comprobante_resource_type, v.comprobante_format,
              v.referencia_pago, v.nombre_titular, v.monto_declarado,
              v.banco_origen, v.fecha_transaccion,
              c.nombre AS comprador_nombre, c.telefono AS comprador_telefono,
@@ -64,9 +96,16 @@ router.get('/ventas-pendientes', auth, async (req, res, next) => {
       JOIN compradores c ON c.id = v.comprador_id
       JOIN sorteos s     ON s.id = v.sorteo_id
       WHERE v.estado_pago IN ('pendiente','en_revision') AND v.es_administrador = false
-      ORDER BY v.creado_en ASC
-    `);
-    res.json(rows);
+      ORDER BY v.creado_en ASC, v.id ASC
+      LIMIT $1 OFFSET $2
+    `, [limit, offset]);
+    const ventas = rows.map(venta => ({
+      ...venta,
+      comprobante_url: venta.comprobante_public_id
+        ? urlPrivada(venta.comprobante_public_id, venta.comprobante_resource_type, venta.comprobante_format)
+        : venta.comprobante_url,
+    }));
+    res.json({ ventas, total: countResult.rows[0].total, limit, offset });
   } catch (err) { next(err); }
 });
 
@@ -123,6 +162,10 @@ router.post('/extraer-boletas', auth, async (req, res, next) => {
           await client.query('ROLLBACK');
           break;
         }
+        await client.query(`
+          INSERT INTO notificaciones (venta_id, canal, estado, tipo_trabajo, mensaje)
+          VALUES ($1, 'whatsapp', 'pendiente', 'boleta_admin', 'Generar y enviar boleta extraída')
+        `, [venta[0].id]);
         await client.query('COMMIT');
         creadas.push({ venta_id: venta[0].id, carton_id: asignados[0].id, codigo_unico: asignados[0].codigo_unico, numeros: asignados[0].numeros });
       }
@@ -134,64 +177,9 @@ router.post('/extraer-boletas', auth, async (req, res, next) => {
       return res.status(409).json({ error: 'No se pudo reservar ninguna boleta (sin disponibilidad)' });
 
     res.status(201).json({
-      message: `${creadas.length} boleta(s) reservada(s) — enviando por WhatsApp...`,
+      message: `${creadas.length} boleta(s) reservada(s) — envío agregado a la cola de WhatsApp`,
       cartones: creadas,
     });
-
-    // Generar el PDF y enviar cada boleta por WhatsApp de forma individual,
-    // sin bloquear la respuesta al admin. No marca como pagado — eso pasa
-    // aparte cuando el admin apruebe cada venta al recibir el pago.
-    (async () => {
-      const { rows: sorteoRows } = await db.query(
-        'SELECT nombre, fecha_sorteo, imagen_premio_url FROM sorteos WHERE id = $1', [sorteo_id]
-      );
-      const sorteoInfo = sorteoRows[0] || {};
-      const fechaSorteoTexto = sorteoInfo.fecha_sorteo
-        ? new Date(sorteoInfo.fecha_sorteo).toLocaleDateString('es-CO', { dateStyle: 'long' })
-        : '';
-      const whatsappContacto = process.env.WHATSAPP_CONTACTO_PUBLICO || '';
-      const { generarHojaCartonesPDF, generarBoletasConImagenPremio } = require('../services/pdfGenerator');
-      const { enviarBoletaDirectaPorWhatsApp, nombreArchivoBoleta } = require('../services/whatsapp');
-
-      for (const item of creadas) {
-        try {
-          let pdfUrl;
-          // El PDF se llama Boleta_<número> (ej. Boleta_123456)
-          const publicId = `boletas/${sorteo_id}/${nombreArchivoBoleta({ tipo_boleta: modalidad.tipo_boleta, numeros: item.numeros, codigo_unico: item.codigo_unico })}`;
-          if (sorteoInfo.imagen_premio_url) {
-            ({ pdfUrl } = await generarBoletasConImagenPremio({
-              cartones: [{ codigo_unico: item.codigo_unico, numeros: item.numeros }],
-              imagenPremioUrl: sorteoInfo.imagen_premio_url,
-              sorteoNombre: sorteoInfo.nombre,
-              fechaSorteoTexto,
-              precioBoleta: modalidad.precio_boleta,
-              whatsappContacto,
-              fuenteResultado: modalidad.fuente_resultado,
-              ventaId: item.venta_id,
-              publicId,
-            }));
-          } else {
-            ({ pdfUrl } = await generarHojaCartonesPDF({
-              cartones: [{ codigo_unico: item.codigo_unico, numeros: item.numeros }],
-              tipoBoleta: modalidad.tipo_boleta || 'bingo',
-              fuenteResultado: modalidad.fuente_resultado,
-              sorteoNombre: sorteoInfo.nombre,
-              fechaSorteoTexto,
-              ventaId: item.venta_id,
-              whatsappContacto,
-              publicId,
-            }));
-          }
-          await db.query('UPDATE cartones SET pdf_url = $1 WHERE id = $2', [pdfUrl, item.carton_id]);
-          await enviarBoletaDirectaPorWhatsApp(item.venta_id);
-          console.log(`[Extracción] Boleta ${item.codigo_unico} enviada por WhatsApp`);
-        } catch (err) {
-          console.error(`[Extracción] Error enviando boleta ${item.codigo_unico}:`, err.message);
-        }
-        // Pausa breve entre boletas para no saturar el envío
-        await new Promise(r => setTimeout(r, 1500));
-      }
-    })();
   } catch (err) { next(err); }
 });
 
@@ -226,20 +214,21 @@ router.patch('/ventas/:id/aprobar', auth, async (req, res, next) => {
     const { rows } = await client.query(`
       UPDATE ventas SET estado_pago = 'aprobado',
         aprobado_por = $1, aprobado_en = NOW()
-      WHERE id = $2 AND estado_pago != 'aprobado'
+      WHERE id = $2 AND estado_pago IN ('pendiente', 'en_revision')
       RETURNING *
     `, [req.admin.id, req.params.id]);
 
     if (!rows.length) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Venta no encontrada o ya aprobada' });
+        return res.status(409).json({ error: 'La venta no existe o su estado ya no permite aprobarla' });
     }
 
     const venta = rows[0];
 
-    // 2. Los cartones ya quedaron asignados desde que se creó la venta —
-    //    aquí solo los marcamos como vendidos (pagados)
-    const cartones = await client.query(`
+    // 2. Las ventas nuevas ya tienen cartones asignados al comprarse. Las
+    //    ventas antiguas que quedaron pendientes sin asignación se completan
+    //    aquí dentro de la misma transacción antes de confirmar el pago.
+    let cartones = await client.query(`
       SELECT c.id, c.codigo_unico, c.numeros, c.tipo_boleta
       FROM cartones c
       JOIN venta_cartones vc ON vc.carton_id = c.id
@@ -247,13 +236,35 @@ router.patch('/ventas/:id/aprobar', auth, async (req, res, next) => {
       FOR UPDATE OF c
     `, [venta.id]);
 
-    if (cartones.rows.length < venta.cantidad) {
+    if (cartones.rows.length === 0) {
+      const asignados = await asignarCartonesAVenta(client, {
+        modalidadId: venta.modalidad_id,
+        ventaId: venta.id,
+        cantidad: venta.cantidad,
+      });
+
+      if (!asignados) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'No hay suficientes boletas disponibles para completar esta venta' });
+      }
+
+      cartones = { rows: asignados };
+    }
+
+    if (cartones.rows.length !== venta.cantidad) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'Esta venta no tiene boletas asignadas (dato inconsistente)' });
+      return res.status(409).json({ error: 'La cantidad de boletas asignadas no coincide con la venta (dato inconsistente)' });
     }
 
     for (const carton of cartones.rows) {
       await client.query('UPDATE cartones SET vendido = true WHERE id = $1', [carton.id]);
+    }
+
+    if (!venta.es_administrador) {
+      await client.query(`
+        INSERT INTO notificaciones (venta_id, canal, estado, tipo_trabajo, mensaje)
+        VALUES ($1, 'whatsapp', 'pendiente', 'venta_aprobada', 'Generar y enviar cartones aprobados')
+      `, [venta.id]);
     }
 
       await client.query('COMMIT');
@@ -264,70 +275,7 @@ router.patch('/ventas/:id/aprobar', auth, async (req, res, next) => {
       return res.json({ message: 'Pago confirmado', venta_id: venta.id });
     }
 
-    // 4. Generar el PDF de las boletas (con imagen de premiación si el evento tiene una,
-    //    o la hoja clásica de respaldo si no) y disparar el envío de WhatsApp
-    (async () => {
-      try {
-        console.log(`[Venta ${venta.id}] Iniciando generación de PDF y envío por WhatsApp...`);
-        const { generarHojaCartonesPDF, generarBoletasConImagenPremio } = require('../services/pdfGenerator');
-        const { rows: sorteoRows } = await db.query(
-          'SELECT nombre, fecha_sorteo, imagen_premio_url FROM sorteos WHERE id = $1', [venta.sorteo_id]
-        );
-        const { rows: modRows } = await db.query(
-          'SELECT nombre, tipo_boleta, precio_boleta, metodo_resultado, fuente_resultado FROM modalidades WHERE id = $1',
-          [venta.modalidad_id]
-        );
-        const sorteoInfo    = sorteoRows[0] || {};
-        const modalidadInfo = modRows[0] || {};
-        const fechaSorteoTexto = sorteoInfo.fecha_sorteo
-          ? new Date(sorteoInfo.fecha_sorteo).toLocaleDateString('es-CO', { dateStyle: 'long' })
-          : '';
-        const whatsappContacto = process.env.WHATSAPP_CONTACTO_PUBLICO || '';
-
-        let pdfUrl;
-        if (sorteoInfo.imagen_premio_url) {
-          console.log(`[Venta ${venta.id}] Generando boleta con imagen de premiación...`);
-          ({ pdfUrl } = await generarBoletasConImagenPremio({
-            cartones: cartones.rows.map(c => c),
-            imagenPremioUrl: sorteoInfo.imagen_premio_url,
-            sorteoNombre: sorteoInfo.nombre,
-            fechaSorteoTexto,
-            precioBoleta: modalidadInfo.precio_boleta,
-            whatsappContacto,
-            fuenteResultado: modalidadInfo.fuente_resultado,
-            ventaId: venta.id,
-          }));
-        } else {
-          console.log(`[Venta ${venta.id}] Generando hoja clásica de cartones...`);
-          ({ pdfUrl } = await generarHojaCartonesPDF({
-            cartones: cartones.rows.map(c => c),
-            tipoBoleta: modalidadInfo.tipo_boleta || 'bingo',
-            modalidadNombre: modalidadInfo.nombre,
-            fuenteResultado: modalidadInfo.fuente_resultado,
-            sorteoNombre: sorteoInfo.nombre,
-            fechaSorteoTexto,
-            ventaId: venta.id,
-            whatsappContacto,
-          }));
-        }
-        console.log(`[Venta ${venta.id}] PDF generado: ${pdfUrl}`);
-
-        const idsCartones = cartones.rows.map(c => c.id);
-        await db.query(
-          'UPDATE cartones SET pdf_url = $1 WHERE id = ANY($2::uuid[])',
-          [pdfUrl, idsCartones]
-        );
-
-        console.log(`[Venta ${venta.id}] Enviando por WhatsApp...`);
-        const { enviarCartonesPorWhatsApp } = require('../services/whatsapp');
-        await enviarCartonesPorWhatsApp(venta.id);
-        console.log(`[Venta ${venta.id}] ✓ WhatsApp enviado correctamente`);
-      } catch (err) {
-        console.error(`[Venta ${venta.id}] ✗ ERROR generando/enviando:`, err.message, err.stack);
-      }
-    })();
-
-    res.json({ message: 'Venta aprobada y cartones asignados', venta_id: venta.id });
+    res.json({ message: 'Venta aprobada; generación y envío agregados a la cola', venta_id: venta.id });
   } catch (err) {
     await client.query('ROLLBACK');
     next(err);
@@ -338,27 +286,43 @@ router.patch('/ventas/:id/aprobar', auth, async (req, res, next) => {
 
 // PATCH /api/admin/ventas/:id/rechazar
 router.patch('/ventas/:id/rechazar', auth, async (req, res, next) => {
+  const client = await db.pool.connect();
   try {
     const { notas } = req.body;
-    await db.query(`
+    await client.query('BEGIN');
+
+    const { rows } = await client.query(`
       UPDATE ventas SET estado_pago = 'rechazado', notas_admin = $1
-      WHERE id = $2
-    `, [notas || '', req.params.id]);
+      WHERE id = $2 AND estado_pago IN ('pendiente', 'en_revision')
+      RETURNING id
+    `, [typeof notas === 'string' ? notas.slice(0, 2000) : '', req.params.id]);
+
+    if (!rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'La venta no existe o su estado ya no permite rechazarla' });
+    }
 
     // Desvincular y liberar las boletas de esta venta (el trigger descuenta el contador solo)
-    await db.query('DELETE FROM venta_cartones WHERE venta_id = $1', [req.params.id]);
-    await db.query(`
-      UPDATE cartones SET reservado_venta_id = NULL, reservado_hasta = NULL, vendido = false
+    await client.query('DELETE FROM venta_cartones WHERE venta_id = $1', [req.params.id]);
+    await client.query(`
+      UPDATE cartones SET reservado_venta_id = NULL, reservado_hasta = NULL,
+        reserva_token_hash = NULL, vendido = false
       WHERE reservado_venta_id = $1
     `, [req.params.id]);
 
+    await client.query('COMMIT');
     res.json({ message: 'Venta rechazada, boletas liberadas' });
-  } catch (err) { next(err); }
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
 });
 
 // GET /api/admin/eventos/:sorteoId/boletas — todas las boletas de un evento,
 // con el comprador (si ya fue vendida) y filtros por número o teléfono
-// query params opcionales: ?numero=047  ?telefono=3114470472  ?modalidad_id=...
+// query params opcionales: ?numero=047  ?telefono=<teléfono>  ?modalidad_id=...
 router.get('/eventos/:sorteoId/boletas', auth, async (req, res, next) => {
   try {
     const { numero, telefono, modalidad_id } = req.query;
