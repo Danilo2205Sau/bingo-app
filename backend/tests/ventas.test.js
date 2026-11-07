@@ -331,4 +331,3 @@ describe('PATCH /api/admin/ventas/:id/rechazar', () => {
     expect(countersAfterReject.rows[0]).toEqual({ cartones_vendidos: 0, boletas_vendidas: 0 });
   });
 });
-
