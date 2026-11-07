@@ -9,9 +9,7 @@ const { getApp, limpiarBD, crearAdmin, tokenAdmin, crearSorteo } = require('./he
 let app, admin, token;
 
 beforeAll(async () => {
-  app   = getApp();
-  admin = await crearAdmin();
-  token = tokenAdmin(admin);
+  app = getApp();
 });
 
 beforeEach(async () => {
