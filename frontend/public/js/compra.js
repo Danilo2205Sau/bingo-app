@@ -64,15 +64,16 @@ function mostrarSelectorEventos() {
   const grid = document.getElementById('eventos-grid');
   grid.classList.toggle('uno', eventosActivos.length === 1);
   grid.innerHTML = eventosActivos.map(ev => {
+    const imagenUrl = safeCloudinaryUrl(ev.imagen_premio_url);
     const mod = (ev.modalidades && ev.modalidades[0]) || {};
     const total = mod.total_boletas || 0;
     const vendidas = mod.boletas_vendidas || 0;
     const disponibles = Math.max(total - vendidas, 0);
     const pct = total ? Math.min(100, Math.round((vendidas / total) * 100)) : 0;
     return `
-      <article class="lp-card" onclick="seleccionarEvento('${ev.id}')">
+      <article class="lp-card" data-evento-id="${escapeHTML(ev.id)}" tabindex="0" role="button">
         <div class="lp-card-img">
-          ${ev.imagen_premio_url ? `<img src="${escapeHTML(ev.imagen_premio_url)}" alt="${escapeHTML(ev.nombre)}" loading="lazy" />` : `<span class="lp-noimg">🏆</span>`}
+          ${imagenUrl ? `<img src="${escapeHTML(imagenUrl)}" alt="${escapeHTML(ev.nombre)}" loading="lazy" />` : `<span class="lp-noimg">🏆</span>`}
           <span class="lp-tag">${mod.tipo_boleta === 'rifa' ? '🎟️ Rifa' : '🎱 Bingo'}</span>
           <span class="lp-tag disp">${disponibles} disponibles</span>
         </div>
@@ -108,8 +109,9 @@ async function seleccionarEvento(id) {
     formatFecha(sorteoActivo.fecha_sorteo);
 
   const imgEl = document.getElementById('sorteo-imagen-premio');
-  if (sorteoActivo.imagen_premio_url) {
-    imgEl.src = sorteoActivo.imagen_premio_url;
+  const imagenUrl = safeCloudinaryUrl(sorteoActivo.imagen_premio_url);
+  if (imagenUrl) {
+    imgEl.src = imagenUrl;
     imgEl.style.display = 'block';
   } else {
     imgEl.style.display = 'none';
@@ -148,7 +150,7 @@ async function cargarNumerosDisponibles() {
     numerosDisponibles = await Api.getNumerosDisponibles(modalidadActiva.id);
     renderNumerosGrid();
   } catch (err) {
-    grid.innerHTML = `<p style="color:#712B13;font-size:13px">${err.message}</p>`;
+    grid.textContent = 'No fue posible cargar los números. Intenta de nuevo.';
   }
 }
 
@@ -163,7 +165,7 @@ function renderNumerosGrid() {
     const elegido = numerosElegidos.includes(c.id);
     return `
       <button type="button" class="qty-btn ${elegido ? 'active' : ''}" style="padding:10px 4px;font-size:13px"
-        onclick="toggleNumero('${c.id}')">${texto}</button>
+        data-numero-id="${escapeHTML(c.id)}">${escapeHTML(texto)}</button>
     `;
   }).join('');
   actualizarEstadoNumeros();
@@ -193,6 +195,22 @@ function actualizarEstadoNumeros() {
 
 // ── Eventos ─────────────────────────────────────────────────────
 function inicializarEventos() {
+
+  document.getElementById('eventos-grid').addEventListener('click', (event) => {
+    const tarjeta = event.target.closest('[data-evento-id]');
+    if (tarjeta) seleccionarEvento(tarjeta.dataset.eventoId);
+  });
+  document.getElementById('eventos-grid').addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const tarjeta = event.target.closest('[data-evento-id]');
+    if (!tarjeta) return;
+    event.preventDefault();
+    seleccionarEvento(tarjeta.dataset.eventoId);
+  });
+  document.getElementById('numeros-grid').addEventListener('click', (event) => {
+    const boton = event.target.closest('[data-numero-id]');
+    if (boton) toggleNumero(boton.dataset.numeroId);
+  });
 
   document.getElementById('btn-cambiar-evento').addEventListener('click', () => {
     sorteoActivo = null;
@@ -410,4 +428,18 @@ function escapeHTML(value) {
   const element = document.createElement('span');
   element.textContent = String(value ?? '');
   return element.innerHTML;
+}
+
+function safeCloudinaryUrl(value) {
+  if (!value) return '';
+  try {
+    const url = new URL(value, window.location.origin);
+    const localHttp = ['localhost', '127.0.0.1'].includes(window.location.hostname) && url.protocol === 'http:';
+    return (url.protocol === 'https:' || localHttp) &&
+      (url.hostname === 'res.cloudinary.com' || url.origin === window.location.origin)
+      ? url.href
+      : '';
+  } catch {
+    return '';
+  }
 }
