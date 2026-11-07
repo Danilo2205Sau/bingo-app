@@ -362,4 +362,3 @@ router.get('/eventos/:sorteoId/boletas', auth, async (req, res, next) => {
 });
 
 module.exports = router;
-
