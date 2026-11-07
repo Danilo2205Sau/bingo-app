@@ -11,6 +11,13 @@ let metodoPago       = 'nequi';
 let archivoActual    = null;
 let numerosDisponibles = [];   // [{id, codigo_unico, numeros}]
 let numerosElegidos    = [];   // ids de cartones seleccionados por el comprador
+const MAX_CARTONES_POR_COMPRA = 10;
+let clavePrivadaCompra = null;
+let huellaCompraActual = null;
+let tokenReservaCompra = null;
+let huellaBoletasReservadas = null;
+const CLAVE_STORAGE_COMPRA = 'bingo-compra-idempotency';
+try { clavePrivadaCompra = sessionStorage.getItem(CLAVE_STORAGE_COMPRA); } catch (_) { /* almacenamiento no disponible */ }
 
 // Datos de las cuentas de pago — el admin los configura aquí
 const CUENTAS_PAGO = {
@@ -65,13 +72,13 @@ function mostrarSelectorEventos() {
     return `
       <article class="lp-card" onclick="seleccionarEvento('${ev.id}')">
         <div class="lp-card-img">
-          ${ev.imagen_premio_url ? `<img src="${ev.imagen_premio_url}" alt="${ev.nombre}" loading="lazy" />` : `<span class="lp-noimg">🏆</span>`}
+          ${ev.imagen_premio_url ? `<img src="${escapeHTML(ev.imagen_premio_url)}" alt="${escapeHTML(ev.nombre)}" loading="lazy" />` : `<span class="lp-noimg">🏆</span>`}
           <span class="lp-tag">${mod.tipo_boleta === 'rifa' ? '🎟️ Rifa' : '🎱 Bingo'}</span>
           <span class="lp-tag disp">${disponibles} disponibles</span>
         </div>
         <div class="lp-card-body">
-          <h3>${ev.nombre}</h3>
-          <p class="prem">${ev.premio_descripcion || mod.nombre || ''}</p>
+          <h3>${escapeHTML(ev.nombre)}</h3>
+          <p class="prem">${escapeHTML(ev.premio_descripcion || mod.nombre || '')}</p>
           <div class="lp-meta"><span>📅 ${formatFecha(ev.fecha_sorteo)}</span><span class="lp-price">${formatCOP(mod.precio_boleta || 0)} <small>c/u</small></span></div>
           <div class="lp-bar"><i style="width:${pct}%"></i></div>
           <div class="lp-meta"><span>${pct}% vendido</span></div>
@@ -167,6 +174,9 @@ function toggleNumero(id) {
   if (idx >= 0) {
     numerosElegidos.splice(idx, 1);
   } else {
+    if (numerosElegidos.length >= MAX_CARTONES_POR_COMPRA) {
+      return mostrarError(`Puedes seleccionar hasta ${MAX_CARTONES_POR_COMPRA} boletas por compra`);
+    }
     numerosElegidos.push(id);
   }
   cantidadActual = numerosElegidos.length;
@@ -282,14 +292,33 @@ async function procesarCompra() {
   if (!cantidadActual || cantidadActual < 1)
     return mostrarError('Elige la cantidad de boletas');
 
+  const huellaCompra = JSON.stringify([
+    nombre, telefono, cantidadActual, metodoPago, sorteoActivo.id, modalidadActiva.id,
+    [...numerosElegidos].sort(),
+  ]);
+  if (huellaCompra !== huellaCompraActual) {
+    if (huellaCompraActual !== null || !clavePrivadaCompra) {
+      clavePrivadaCompra = generarClavePrivada();
+      guardarClavePrivadaCompra();
+    }
+    huellaCompraActual = huellaCompra;
+  }
+
   const btn = document.getElementById('btn-comprar');
   btn.disabled     = true;
   btn.textContent  = 'Procesando...';
 
   try {
     // Si el comprador eligió números específicos, reservarlos primero
+    let reservationToken = null;
     if (modalidadActiva.permite_elegir_numero) {
-      await Api.reservarNumeros(modalidadActiva.id, numerosElegidos);
+      const huellaBoletas = JSON.stringify([...numerosElegidos].sort());
+      if (!tokenReservaCompra || huellaBoletas !== huellaBoletasReservadas) {
+        const reserva = await Api.reservarNumeros(modalidadActiva.id, numerosElegidos);
+        tokenReservaCompra = reserva.reservation_token;
+        huellaBoletasReservadas = huellaBoletas;
+      }
+      reservationToken = tokenReservaCompra;
     }
 
     const formData = new FormData();
@@ -299,17 +328,25 @@ async function procesarCompra() {
     formData.append('metodo_pago',     metodoPago);
     formData.append('sorteo_id',       sorteoActivo.id);
     formData.append('modalidad_id',    modalidadActiva.id);
+    formData.append('idempotency_key', clavePrivadaCompra);
     formData.append('comprobante',     archivoActual);
     if (modalidadActiva.permite_elegir_numero) {
       formData.append('carton_ids', JSON.stringify(numerosElegidos));
+      formData.append('reservation_token', reservationToken);
     }
 
     const resultado = await Api.crearVenta(formData);
 
     // Mostrar éxito
     document.getElementById('success-msg').style.display = 'block';
-    document.getElementById('success-id').textContent =
-      `ID de compra: ${resultado.venta_id}`;
+    const successId = document.getElementById('success-id');
+    successId.textContent = `ID de compra: ${resultado.venta_id}\nCódigo privado de consulta: ${resultado.codigo_consulta}`;
+    successId.style.whiteSpace = 'pre-wrap';
+    clavePrivadaCompra = null;
+    huellaCompraActual = null;
+    try { sessionStorage.removeItem(CLAVE_STORAGE_COMPRA); } catch (_) { /* almacenamiento no disponible */ }
+    tokenReservaCompra = null;
+    huellaBoletasReservadas = null;
 
     // Ocultar formulario
     document.querySelectorAll('.card').forEach(c => c.style.display = 'none');
@@ -319,15 +356,37 @@ async function procesarCompra() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
   } catch (err) {
-    mostrarError(err.message);
+    if (err.message.includes('Esta clave ya se usó con otros datos de compra')) {
+      clavePrivadaCompra = generarClavePrivada();
+      huellaCompraActual = huellaCompra;
+      guardarClavePrivadaCompra();
+      mostrarError('Los datos cambiaron desde el intento anterior. Vuelve a presionar Comprar para registrar este nuevo intento.');
+    } else {
+      mostrarError(err.message);
+    }
     // Si la reserva o la venta fallaron, refrescamos los números por si alguno ya no está libre
-    if (modalidadActiva?.permite_elegir_numero) {
+    if (modalidadActiva?.permite_elegir_numero && /reserva|disponible|boletas|selección/i.test(err.message)) {
       numerosElegidos = [];
+      tokenReservaCompra = null;
+      huellaBoletasReservadas = null;
       cargarNumerosDisponibles();
     }
     btn.disabled    = false;
     btn.textContent = 'Comprar ahora';
   }
+}
+
+function generarClavePrivada() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function guardarClavePrivadaCompra() {
+  if (!clavePrivadaCompra) return;
+  try { sessionStorage.setItem(CLAVE_STORAGE_COMPRA, clavePrivadaCompra); } catch (_) { /* almacenamiento no disponible */ }
 }
 
 function mostrarError(msg) {
@@ -345,4 +404,10 @@ function mostrarError(msg) {
   toast.textContent = msg;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 4000);
+}
+
+function escapeHTML(value) {
+  const element = document.createElement('span');
+  element.textContent = String(value ?? '');
+  return element.innerHTML;
 }

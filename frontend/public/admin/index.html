@@ -728,6 +728,11 @@
             <div class="pagos-lista" id="pagos-lista">
               <div class="empty-pagos">Cargando pagos...</div>
             </div>
+            <div class="flex items-center justify-between gap-3 mt-3" id="pagos-paginacion">
+              <button class="btn-action" id="btn-pagos-anterior" type="button" disabled>← Anterior</button>
+              <span id="pagos-pagina" aria-live="polite" style="color:#94a3b8;font-size:12px">0-0 de 0</span>
+              <button class="btn-action" id="btn-pagos-siguiente" type="button" disabled>Siguiente →</button>
+            </div>
           </div>
 
         </div>
@@ -742,6 +747,7 @@
       <h3 id="modal-titulo" class="mb-2">Comprobante</h3>
       <p id="modal-detalle" class="text-sm mb-2" style="color:#94a3b8"></p>
       <img id="modal-img" src="" alt="Comprobante de pago" class="w-full rounded-lg my-3" />
+      <iframe id="modal-pdf" title="Comprobante PDF" class="w-full rounded-lg my-3" style="display:none;height:65vh;border:0"></iframe>
       <div class="modal-botones mt-3">
         <button class="btn-aprobar text-sm" id="modal-aprobar">✓ Aprobar y enviar cartón</button>
         <button class="btn-rechazar text-sm" id="modal-rechazar">✕ Rechazar</button>

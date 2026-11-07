@@ -27,7 +27,7 @@ async function enviarCartonesPorWhatsApp(ventaId) {
   const { nombre, telefono, sorteo, fecha_sorteo, premio_descripcion, tipo_boleta } = rows[0];
   const etiqueta = tipo_boleta === 'rifa' ? 'boleta' : 'cartón';
 
-  // Formatear número colombiano: 3101234567 → 573101234567
+  // Formatear número colombiano de 10 dígitos para incluir el prefijo 57.
   const numeroFormateado = formatearNumero(telefono);
   console.log(`[Venta ${ventaId}] Teléfono original: "${telefono}" → formateado: "${numeroFormateado}"`);
 
@@ -68,11 +68,7 @@ async function enviarCartonesPorWhatsApp(ventaId) {
   const pdfUrl = rows[0].pdf_url;
   if (!pdfUrl) throw new Error(`Venta ${ventaId} sin pdf_url asignado aún`);
 
-  // Registrar notificación exitosa
-  await db.query(`
-    INSERT INTO notificaciones (venta_id, canal, estado, mensaje, enviado_en)
-    VALUES ($1, 'whatsapp', 'enviado', $2, NOW())
-  `, [ventaId, `${rows.length} ${etiqueta}(es) enviados via Meta API`]);
+  await registrarEnvio(ventaId, `${rows.length} ${etiqueta}(es) enviados via Meta API`);
 }
 
 
@@ -140,10 +136,21 @@ async function enviarBoletaDirectaPorWhatsApp(ventaId) {
     }
   }
 
-  await db.query(`
-    INSERT INTO notificaciones (venta_id, canal, estado, mensaje, enviado_en)
-    VALUES ($1, 'whatsapp', 'enviado', $2, NOW())
-  `, [ventaId, `Boleta ${nombreArchivo} enviada (venta directa)`]);
+  await registrarEnvio(ventaId, `Boleta ${nombreArchivo} enviada (venta directa)`);
+}
+
+async function registrarEnvio(ventaId, mensaje) {
+  const { rowCount } = await db.query(`
+    UPDATE notificaciones SET estado = 'enviado', mensaje = $2,
+      enviado_en = NOW(), error_msg = NULL, lease_hasta = NULL
+    WHERE venta_id = $1 AND canal = 'whatsapp' AND estado = 'pendiente'
+  `, [ventaId, mensaje]);
+  if (!rowCount) {
+    await db.query(`
+      INSERT INTO notificaciones (venta_id, canal, estado, mensaje, enviado_en)
+      VALUES ($1, 'whatsapp', 'enviado', $2, NOW())
+    `, [ventaId, mensaje]);
+  }
 }
 
 
@@ -299,10 +306,16 @@ async function subirMediaWhatsApp(urlPdf, ventaId) {
 
 async function registrarError(ventaId, errorMsg) {
   try {
-    await db.query(`
-      INSERT INTO notificaciones (venta_id, canal, estado, error_msg)
-      VALUES ($1, 'whatsapp', 'fallido', $2)
-    `, [ventaId, errorMsg]);
+    const { rowCount } = await db.query(`
+      UPDATE notificaciones SET error_msg = $2
+      WHERE venta_id = $1 AND canal = 'whatsapp' AND estado = 'pendiente'
+    `, [ventaId, String(errorMsg).slice(0, 2000)]);
+    if (!rowCount) {
+      await db.query(`
+        INSERT INTO notificaciones (venta_id, canal, estado, error_msg)
+        VALUES ($1, 'whatsapp', 'fallido', $2)
+      `, [ventaId, String(errorMsg).slice(0, 2000)]);
+    }
   } catch(e) {
     console.error('Error registrando notificacion:', e);
   }

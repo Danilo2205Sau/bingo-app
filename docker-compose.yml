@@ -1,40 +1,46 @@
-version: '3.8'
-
 services:
-  # Base de datos PostgreSQL
   db:
     image: postgres:16-alpine
-    container_name: bingo_db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: bingo_user
-      POSTGRES_PASSWORD: bingo_pass
-      POSTGRES_DB: bingo_db
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in the project .env file}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the project .env file}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in the project .env file}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/src/migrations/001_init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-  # Backend Node.js
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: bingo_backend
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
-      DATABASE_URL: postgresql://bingo_user:bingo_pass@db:5432/bingo_db
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       NODE_ENV: development
     env_file:
       - ./backend/.env
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    command: ["sh", "-c", "npm run migrate && npm start"]
     volumes:
       - ./backend:/app
       - /app/node_modules
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
 
 volumes:
   postgres_data:

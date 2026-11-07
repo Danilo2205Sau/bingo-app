@@ -2,71 +2,112 @@ const router  = require('express').Router();
 const db      = require('../config/db');
 const auth    = require('../middleware/auth');
 const upload  = require('../middleware/upload');
-const { v4: uuidv4 } = require('uuid');
 const { generarBoleta, generarCodigo } = require('../services/ticketGenerator');
+const { createCapability, hashCapability } = require('../services/capabilities');
+const { subirArchivo } = require('../services/cloudinary');
 
 // POST /api/cartones/generar — generar N boletas para una modalidad (bingo o rifa)
 router.post('/generar', auth, async (req, res, next) => {
+  let client;
+  let transaccionIniciada = false;
   try {
     const { modalidad_id, cantidad } = req.body;
     if (!modalidad_id || !cantidad)
       return res.status(400).json({ error: 'modalidad_id y cantidad requeridos' });
 
-    const cant = parseInt(cantidad);
-    if (!Number.isInteger(cant) || cant < 1)
-      return res.status(400).json({ error: 'La cantidad debe ser un número mayor a 0' });
+    const cantidadTexto = String(cantidad).trim();
+    if (!/^\d+$/.test(cantidadTexto))
+      return res.status(400).json({ error: 'La cantidad debe ser un entero válido' });
+    const cant = Number(cantidadTexto);
+    if (!Number.isSafeInteger(cant) || cant < 1 || cant > 5000)
+      return res.status(400).json({ error: 'La cantidad debe estar entre 1 y 5.000 boletas por solicitud' });
 
-    const { rows: modRows } = await db.query(
-      'SELECT * FROM modalidades WHERE id = $1', [modalidad_id]
+    client = await db.pool.connect();
+    await client.query('BEGIN');
+    transaccionIniciada = true;
+
+    const { rows: modRows } = await client.query(
+      'SELECT * FROM modalidades WHERE id = $1 FOR UPDATE', [modalidad_id]
     );
     if (!modRows.length)
+    {
+      await client.query('ROLLBACK');
+      transaccionIniciada = false;
       return res.status(404).json({ error: 'Modalidad no encontrada' });
+    }
     const modalidad = modRows[0];
 
-    const { rows: countRows } = await db.query(
+    const { rows: countRows } = await client.query(
       'SELECT COUNT(*)::int AS total FROM cartones WHERE modalidad_id = $1', [modalidad_id]
     );
     const yaGenerados = countRows[0].total;
     const disponiblesParaGenerar = modalidad.total_boletas - yaGenerados;
 
+    if (yaGenerados + cant > 2147483647) {
+      await client.query('ROLLBACK');
+      transaccionIniciada = false;
+      return res.status(409).json({ error: 'La modalidad alcanzó el límite de boletas permitido' });
+    }
+
     // Si se pide más de lo que queda en el tope actual, el tope se amplía
-    // automáticamente (en vez de bloquear la generación con un error)
+    // automáticamente dentro de la misma transacción que genera los cartones.
     if (cant > disponiblesParaGenerar) {
       const nuevoTotal = yaGenerados + cant;
-      await db.query('UPDATE modalidades SET total_boletas = $1 WHERE id = $2', [nuevoTotal, modalidad_id]);
+      await client.query('UPDATE modalidades SET total_boletas = $1 WHERE id = $2', [nuevoTotal, modalidad_id]);
       modalidad.total_boletas = nuevoTotal;
     }
 
     const generados = [];
+    let indiceSecuencial = yaGenerados;
+    const maxRondas = Math.ceil(cant / 250) + 20;
 
-        for (let i = 0; i < cant; i++) {
-      let insertado = null;
+    for (let ronda = 0; generados.length < cant && ronda < maxRondas; ronda++) {
+      const faltan = Math.min(250, cant - generados.length);
+      const candidatos = new Map();
       let intentos = 0;
-
-      // Reintenta si el código (= número, en rifa) ya existe — evita choques
-      while (!insertado && intentos < 20) {
+      while (candidatos.size < faltan && intentos < faltan * 20) {
         intentos++;
-        const { numeros, codigoSugerido } = generarBoleta(modalidad, yaGenerados + i);
-        const codigo = codigoSugerido || generarCodigo();
-
-        const { rows } = await db.query(`
-          INSERT INTO cartones (sorteo_id, modalidad_id, tipo_boleta, codigo_unico, numeros, pdf_url, tipo)
-          VALUES ($1,$2,$3,$4,$5,NULL,'generado')
-          ON CONFLICT (codigo_unico) DO NOTHING
-          RETURNING id, codigo_unico
-        `, [modalidad.sorteo_id, modalidad_id, modalidad.tipo_boleta, codigo, JSON.stringify(numeros)]);
-
-        if (rows.length) insertado = rows[0];
+        const { numeros, codigoSugerido } = generarBoleta(modalidad, indiceSecuencial++);
+        const codigo = String(codigoSugerido || generarCodigo());
+        if (!candidatos.has(codigo)) candidatos.set(codigo, JSON.stringify(numeros));
       }
+      if (!candidatos.size) break;
 
-      if (!insertado) {
-        return res.status(500).json({ error: `No se pudo generar un código único para la boleta ${i + 1} tras 20 intentos. Prueba con más dígitos en la configuración de la rifa.` });
-      }
-      generados.push(insertado);
+      const { rows } = await client.query(`
+        INSERT INTO cartones (sorteo_id, modalidad_id, tipo_boleta, codigo_unico, numeros, pdf_url, tipo)
+        SELECT $1, $2, $3, lote.codigo, lote.numeros::jsonb, NULL, 'generado'
+        FROM unnest($4::text[], $5::text[]) AS lote(codigo, numeros)
+        ON CONFLICT (codigo_unico) DO NOTHING
+        RETURNING id, codigo_unico
+      `, [
+        modalidad.sorteo_id,
+        modalidad_id,
+        modalidad.tipo_boleta,
+        [...candidatos.keys()],
+        [...candidatos.values()],
+      ]);
+      generados.push(...rows);
     }
 
+    if (generados.length !== cant) {
+      await client.query('ROLLBACK');
+      transaccionIniciada = false;
+      return res.status(409).json({
+        error: `Solo se pudieron generar ${generados.length} de ${cant} boletas. Revisa la configuración de números de la rifa.`,
+      });
+    }
+
+    await client.query('COMMIT');
+    transaccionIniciada = false;
     res.status(201).json({ message: `${cant} boleta(s) generada(s)`, cartones: generados });
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (transaccionIniciada) await client.query('ROLLBACK').catch(() => {});
+    if (err.code === 'INVALID_RAFFLE_CONFIG') return res.status(400).json({ error: err.message });
+    if (err.code === 'RAFFLE_NUMBERS_EXHAUSTED') return res.status(409).json({ error: err.message });
+    next(err);
+  } finally {
+    client?.release();
+  }
 });
 
 // POST /api/cartones/subir — subir un PDF ya hecho
@@ -76,12 +117,13 @@ router.post('/subir', auth, upload.single('pdf'), async (req, res, next) => {
     if (!sorteo_id || !req.file)
       return res.status(400).json({ error: 'sorteo_id y archivo PDF requeridos' });
 
+    const archivo = await subirArchivo(req.file, { folder: 'bingo/cartones', authenticated: true });
     const codigo = generarCodigo();
     const { rows } = await db.query(`
       INSERT INTO cartones (sorteo_id, modalidad_id, codigo_unico, pdf_url, tipo)
       VALUES ($1,$2,$3,$4,'subido')
       RETURNING id, codigo_unico
-    `, [sorteo_id, modalidad_id || null, codigo, req.file.path]);
+    `, [sorteo_id, modalidad_id || null, codigo, archivo.secure_url]);
 
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }
@@ -96,7 +138,8 @@ router.get('/disponibles/:modalidadId', async (req, res, next) => {
       FROM cartones
       WHERE modalidad_id = $1
         AND vendido = false
-        AND (reservado_hasta IS NULL OR reservado_hasta < NOW())
+        AND reservado_venta_id IS NULL
+        AND (reserva_token_hash IS NULL OR reservado_hasta <= NOW())
         AND id NOT IN (SELECT carton_id FROM venta_cartones)
       ORDER BY numeros::text ASC
     `, [req.params.modalidadId]);
@@ -112,6 +155,19 @@ router.post('/reservar', async (req, res, next) => {
     const { modalidad_id, carton_ids } = req.body;
     if (!modalidad_id || !Array.isArray(carton_ids) || !carton_ids.length)
       return res.status(400).json({ error: 'modalidad_id y carton_ids (array) requeridos' });
+    if (carton_ids.length > 10 || new Set(carton_ids).size !== carton_ids.length ||
+        carton_ids.some(id => typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))) {
+      return res.status(400).json({ error: 'Selecciona hasta 10 boletas distintas y válidas' });
+    }
+
+    const { rows: modalidad } = await db.query(
+      'SELECT id FROM modalidades WHERE id = $1 AND activo = true AND permite_elegir_numero = true',
+      [modalidad_id]
+    );
+    if (!modalidad.length) return res.status(404).json({ error: 'Modalidad no disponible para elegir boletas' });
+
+    const token = createCapability();
+    const tokenHash = hashCapability(token);
 
     await client.query('BEGIN');
 
@@ -119,7 +175,9 @@ router.post('/reservar', async (req, res, next) => {
       SELECT id, codigo_unico, numeros FROM cartones
       WHERE id = ANY($1::uuid[]) AND modalidad_id = $2
         AND vendido = false
-        AND (reservado_hasta IS NULL OR reservado_hasta < NOW())
+        AND reservado_venta_id IS NULL
+        AND (reserva_token_hash IS NULL OR reservado_hasta <= NOW())
+        AND id NOT IN (SELECT carton_id FROM venta_cartones)
       FOR UPDATE SKIP LOCKED
     `, [carton_ids, modalidad_id]);
 
@@ -132,15 +190,20 @@ router.post('/reservar', async (req, res, next) => {
     }
 
     const expiraEn = new Date(Date.now() + 20 * 60 * 1000); // 20 minutos
-    await client.query(`
-      UPDATE cartones SET reservado_hasta = $1
-      WHERE id = ANY($2::uuid[])
-    `, [expiraEn, carton_ids]);
+    const { rowCount } = await client.query(`
+      UPDATE cartones SET reservado_hasta = $1, reserva_token_hash = $2
+      WHERE id = ANY($3::uuid[]) AND vendido = false AND reservado_venta_id IS NULL
+    `, [expiraEn, tokenHash, carton_ids]);
+    if (rowCount !== carton_ids.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'No se pudo reservar la selección. Elige las boletas de nuevo.' });
+    }
 
     await client.query('COMMIT');
     res.json({
       message: 'Números reservados por 20 minutos. Completa tu compra antes de que expire.',
       expira_en: expiraEn,
+      reservation_token: token,
       cartones: disponibles,
     });
   } catch (err) {
@@ -155,16 +218,12 @@ router.post('/reservar', async (req, res, next) => {
 router.get('/:codigo', async (req, res, next) => {
   try {
     const { rows } = await db.query(`
-      SELECT c.id, c.codigo_unico, c.numeros, c.pdf_url, c.vendido, c.tipo_boleta,
+      SELECT c.id, c.codigo_unico, c.numeros, c.vendido, c.tipo_boleta,
              s.nombre AS sorteo_nombre, s.fecha_sorteo, s.premio_descripcion,
-             m.nombre AS modalidad_nombre, m.metodo_resultado, m.fuente_resultado,
-             comp.nombre AS comprador_nombre
+             m.nombre AS modalidad_nombre, m.metodo_resultado, m.fuente_resultado
       FROM cartones c
       JOIN sorteos s ON s.id = c.sorteo_id
       LEFT JOIN modalidades m ON m.id = c.modalidad_id
-      LEFT JOIN venta_cartones vc ON vc.carton_id = c.id
-      LEFT JOIN ventas v ON v.id = vc.venta_id
-      LEFT JOIN compradores comp ON comp.id = v.comprador_id
       WHERE c.codigo_unico = $1
     `, [req.params.codigo.toUpperCase()]);
 

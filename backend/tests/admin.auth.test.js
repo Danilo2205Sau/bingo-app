@@ -10,11 +10,6 @@ let app;
 
 beforeAll(async () => { app = getApp(); });
 beforeEach(async () => { await limpiarBD(); });
-afterAll(async () => {
-  const db = require('../src/config/db');
-  await db.pool.end();
-});
-
 // ── Grupo: POST /api/admin/login ──────────────────────────────
 describe('POST /api/admin/login', () => {
 
@@ -45,6 +40,16 @@ describe('POST /api/admin/login', () => {
     const res = await request(app)
       .post('/api/admin/login')
       .send({ email: 'noexiste@test.com', password: 'test123' });
+
+    expect(res.status).toBe(401);
+  });
+
+  test('🔒 bloquea el correo de administrador predeterminado heredado', async () => {
+    await crearAdmin({ email: 'admin@bingo.com', password: 'not-a-real-password' });
+
+    const res = await request(app)
+      .post('/api/admin/login')
+      .send({ email: 'admin@bingo.com', password: 'not-a-real-password' });
 
     expect(res.status).toBe(401);
   });

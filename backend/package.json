@@ -2,11 +2,15 @@
   "name": "bingo-app-backend",
   "version": "1.0.0",
   "description": "API REST para sistema de venta de cartones de bingo",
+  "engines": {
+    "node": ">=22"
+  },
   "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
-    "migrate": "psql $DATABASE_URL -f src/migrations/001_init.sql",
+    "migrate": "node migrar.js",
+    "admin:create": "node src/scripts/create-admin.js",
     "test": "jest --runInBand --forceExit",
     "test:watch": "jest --watch --runInBand"
   },
@@ -15,25 +19,27 @@
     "cloudinary": "^2.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.0.0",
-    "express": "^4.18.2",
+    "express": "^4.22.3",
     "express-rate-limit": "^7.0.0",
     "helmet": "^7.0.0",
     "jsonwebtoken": "^9.0.0",
-    "multer": "^1.4.5-lts.1",
-    "multer-storage-cloudinary": "^4.0.0",
+    "multer": "^2.5.0",
     "pdfkit": "^0.14.0",
     "pg": "^8.21.0",
     "tesseract.js": "^5.0.0",
-    "uuid": "^9.0.0"
-   
+    "uuid": "^11.1.1"
   },
   "devDependencies": {
-    "jest": "^29.0.0",
+    "jest": "^29.7.0",
     "nodemon": "^3.0.0",
-    "supertest": "^6.3.0"
+    "supertest": "^7.3.1"
+  },
+  "overrides": {
+    "minimatch": "^11.0.1"
   },
   "jest": {
     "testEnvironment": "node",
+    "globalTeardown": "./tests/global-teardown.js",
     "testMatch": [
       "**/tests/**/*.test.js"
     ],

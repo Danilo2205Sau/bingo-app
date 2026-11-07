@@ -5,6 +5,10 @@
 let tokenAdmin   = null;
 let ventaModal   = null;
 let todosLosEventos = [];
+let pendientesOffset = 0;
+let pendientesTotal = 0;
+let pendientesCache = [];
+const PENDIENTES_POR_PAGINA = 50;
 
 document.addEventListener('DOMContentLoaded', () => {
   const tokenGuardado  = sessionStorage.getItem('admin_token');
@@ -30,6 +34,8 @@ function inicializarEventos() {
   });
 
   document.getElementById('btn-recargar').addEventListener('click', cargarDatos);
+  document.getElementById('btn-pagos-anterior').addEventListener('click', () => cambiarPaginaPendientes(-1));
+  document.getElementById('btn-pagos-siguiente').addEventListener('click', () => cambiarPaginaPendientes(1));
 
   document.getElementById('btn-toggle-form').addEventListener('click', () => {
     const form = document.getElementById('form-sorteo');
@@ -147,7 +153,7 @@ function poblarSelectExtraer() {
   select.innerHTML = todosLosEventos.map(s => {
     const mod = (s.modalidades && s.modalidades[0]) || {};
     const disponibles = (mod.total_boletas || 0) - (mod.boletas_vendidas || 0);
-    return `<option value="${mod.id || ''}" data-sorteo-id="${s.id}">${s.nombre} — ${mod.nombre || ''} (${disponibles} disp.)</option>`;
+    return `<option value="${escapeHTML(mod.id || '')}" data-sorteo-id="${escapeHTML(s.id)}">${escapeHTML(s.nombre)} — ${escapeHTML(mod.nombre || '')} (${disponibles} disp.)</option>`;
   }).join('');
 }
 
@@ -223,9 +229,9 @@ function renderExtraidas() {
     return `
       <div class="boleta-row" style="padding:10px">
         <div>
-          <span class="num">${numTexto}</span>
-          <span style="color:#888"> · ${v.codigo_unico || ''}</span>
-          <div style="color:#888;font-size:11px">${v.comprador_telefono} · ${tiempoRelativo(v.creado_en)}</div>
+          <span class="num">${escapeHTML(numTexto)}</span>
+          <span style="color:#888"> · ${escapeHTML(v.codigo_unico || '')}</span>
+          <div style="color:#888;font-size:11px">${escapeHTML(v.comprador_telefono)} · ${tiempoRelativo(v.creado_en)}</div>
         </div>
         <div style="display:flex;align-items:center;gap:6px">
           <span class="badge ${badgeClaseEstado(v.estado_pago === 'aprobado' ? 'activo' : v.estado_pago === 'rechazado' ? 'cerrado' : 'borrador')}">${estadoTexto[v.estado_pago] || v.estado_pago}</span>
@@ -277,11 +283,11 @@ async function cargarEventos() {
         return `
         <div class="sorteo-item">
           <div class="sorteo-item-top">
-            <strong>${s.nombre} ${mod.tipo_boleta === 'rifa' ? '🎟️' : '🎱'}</strong>
+            <strong>${escapeHTML(s.nombre)} ${mod.tipo_boleta === 'rifa' ? '🎟️' : '🎱'}</strong>
             <span class="badge ${badgeClaseEstado(s.estado)}">${s.estado}</span>
           </div>
           <div style="font-size:12px;color:#888;margin-bottom:8px">
-            ${mod.nombre || 'Sin modalidad'} · ${mod.boletas_vendidas || 0}/${mod.total_boletas || 0} vendidas · ${formatCOP(mod.precio_boleta || 0)} c/u
+            ${escapeHTML(mod.nombre || 'Sin modalidad')} · ${mod.boletas_vendidas || 0}/${mod.total_boletas || 0} vendidas · ${formatCOP(mod.precio_boleta || 0)} c/u
             ${mod.permite_elegir_numero ? ' · elige número' : ''}
           </div>
           <div class="sorteo-item-acciones">
@@ -460,7 +466,7 @@ function poblarSelectCartones() {
 
   select.innerHTML = todosLosEventos.map(s => {
     const mod = (s.modalidades && s.modalidades[0]) || {};
-    return `<option value="${mod.id || ''}" data-sorteo-id="${s.id}">${s.nombre} — ${mod.nombre || ''} (${s.estado})</option>`;
+    return `<option value="${escapeHTML(mod.id || '')}" data-sorteo-id="${escapeHTML(s.id)}">${escapeHTML(s.nombre)} — ${escapeHTML(mod.nombre || '')} (${escapeHTML(s.estado)})</option>`;
   }).join('');
 
   if (seleccionPrevia && [...select.options].some(o => o.value === seleccionPrevia)) {
@@ -563,7 +569,7 @@ function poblarSelectBoletas() {
   }
 
   select.innerHTML = todosLosEventos.map(s =>
-    `<option value="${s.id}">${s.nombre} (${s.estado})</option>`
+    `<option value="${escapeHTML(s.id)}">${escapeHTML(s.nombre)} (${escapeHTML(s.estado)})</option>`
   ).join('');
 
   if (seleccionPrevia && [...select.options].some(o => o.value === seleccionPrevia)) {
@@ -632,7 +638,7 @@ async function cargarMetricas() {
         return `
           <div style="margin-bottom:14px;padding-bottom:14px;border-bottom:0.5px solid rgba(0,0,0,.06)">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-              <strong style="font-size:15px">${sorteo.nombre}</strong>
+          <strong style="font-size:15px">${escapeHTML(sorteo.nombre)}</strong>
               <span class="badge badge-approved">Activo</span>
             </div>
             <div class="progress-wrap">
@@ -657,7 +663,19 @@ async function cargarMetricas() {
 async function cargarPendientes() {
   const lista = document.getElementById('pagos-lista');
   try {
-    const ventas = await Api.getVentasPendientes(tokenAdmin);
+    const pagina = await Api.getVentasPendientes(tokenAdmin, pendientesOffset);
+    pendientesTotal = pagina.total;
+    if (!pagina.ventas.length && pendientesOffset > 0 && pendientesTotal > 0) {
+      pendientesOffset = Math.floor((pendientesTotal - 1) / PENDIENTES_POR_PAGINA) * PENDIENTES_POR_PAGINA;
+      return cargarPendientes();
+    }
+    pendientesCache = pagina.ventas;
+    const ventas = pendientesCache;
+    const inicio = pendientesTotal ? pendientesOffset + 1 : 0;
+    const fin = Math.min(pendientesOffset + ventas.length, pendientesTotal);
+    document.getElementById('pagos-pagina').textContent = `${inicio}-${fin} de ${pendientesTotal}`;
+    document.getElementById('btn-pagos-anterior').disabled = pendientesOffset === 0;
+    document.getElementById('btn-pagos-siguiente').disabled = pendientesOffset + ventas.length >= pendientesTotal;
 
     if (!ventas.length) {
       lista.innerHTML = '<div class="empty-pagos">✅ No hay pagos pendientes</div>';
@@ -666,9 +684,9 @@ async function cargarPendientes() {
 
     lista.innerHTML = ventas.map(v => `
       <div class="pago-item" id="pago-${v.id}">
-        <div class="avatar">${iniciales(v.comprador_nombre)}</div>
+        <div class="avatar">${escapeHTML(iniciales(v.comprador_nombre || ''))}</div>
         <div class="pago-meta">
-          <strong>${v.comprador_nombre}</strong>
+          <strong>${escapeHTML(v.comprador_nombre)}</strong>
           <span>${v.cantidad} boleta(s) · ${formatMetodo(v.metodo_pago)} · ${tiempoRelativo(v.creado_en)}</span>
           <span style="display:block;color:#3C3489;font-weight:500">${formatCOP(v.total_pagado)}</span>
         </div>
@@ -691,18 +709,20 @@ async function cargarPendientes() {
   }
 }
 
+function cambiarPaginaPendientes(direccion) {
+  const siguienteOffset = pendientesOffset + direccion * PENDIENTES_POR_PAGINA;
+  if (siguienteOffset < 0 || siguienteOffset >= pendientesTotal) return;
+  pendientesOffset = siguienteOffset;
+  cargarPendientes();
+}
+
 async function aprobarVenta(id) {
   if (!confirm('¿Aprobar este pago y enviar la boleta por WhatsApp?')) return;
   try {
     await Api.aprobarVenta(id, tokenAdmin);
     cerrarModal();
     mostrarToast('✓ Venta aprobada. Boleta asignada correctamente.', 'success');
-    document.getElementById(`pago-${id}`)?.remove();
-    if (!document.querySelectorAll('.pago-item').length) {
-      document.getElementById('pagos-lista').innerHTML =
-        '<div class="empty-pagos">✅ No hay pagos pendientes</div>';
-    }
-    cargarMetricas();
+    await Promise.all([cargarPendientes(), cargarMetricas()]);
   } catch (err) {
     mostrarToast(err.message, 'error');
   }
@@ -714,8 +734,7 @@ async function rechazarVenta(id, notas) {
     await Api.rechazarVenta(id, notas, tokenAdmin);
     cerrarModal();
     mostrarToast('Venta rechazada.', 'warning');
-    document.getElementById(`pago-${id}`)?.remove();
-    cargarMetricas();
+    await Promise.all([cargarPendientes(), cargarMetricas()]);
   } catch (err) {
     mostrarToast(err.message, 'error');
   }
@@ -784,17 +803,15 @@ async function verComprobante(id) {
   document.getElementById('modal-titulo').textContent  = 'Cargando...';
   document.getElementById('modal-detalle').textContent = '';
   const img = document.getElementById('modal-img');
+  const pdf = document.getElementById('modal-pdf');
   img.style.display = 'none';
   img.src = '';
+  pdf.style.display = 'none';
+  pdf.src = 'about:blank';
   document.getElementById('modal-validacion')?.remove();
 
   try {
-    const token = sessionStorage.getItem('admin_token');
-    const res = await fetch(`${API_URL}/admin/ventas-pendientes`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const ventas = await res.json();
-    const v = ventas.find(venta => venta.id === id);
+    const v = pendientesCache.find(venta => venta.id === id);
     if (!v) return;
 
     document.getElementById('modal-titulo').textContent  = v.comprador_nombre;
@@ -802,8 +819,13 @@ async function verComprobante(id) {
       `${v.cantidad} boleta(s) · ${formatMetodo(v.metodo_pago)} · ${formatCOP(v.total_pagado)}`;
 
     if (v.comprobante_url) {
-      img.src = v.comprobante_url;
-      img.style.display = 'block';
+      if (v.comprobante_format === 'pdf' || /\.pdf(?:$|\?)/i.test(v.comprobante_url)) {
+        pdf.src = v.comprobante_url;
+        pdf.style.display = 'block';
+      } else {
+        img.src = v.comprobante_url;
+        img.style.display = 'block';
+      }
     }
 
     const alertaMonto = v.monto_declarado &&
@@ -855,7 +877,7 @@ async function verComprobante(id) {
                         padding:6px 0;border-bottom:0.5px solid #E8E6DF">
               <span style="color:#888">${f.icon} ${f.label}:</span>
               <strong style="${f.color ? `color:${f.color}` : 'color:#2C2C2A'}">
-                ${f.valor}
+                ${escapeHTML(f.valor)}
               </strong>
             </div>
           `).join('')}
@@ -868,7 +890,7 @@ async function verComprobante(id) {
         ` : hayDatosOCR ? `
           <div style="background:#E1F5EE;border-radius:6px;padding:8px;
                       margin-top:10px;font-size:12px;color:#085041">
-            ✓ Verifica la referencia <strong>${v.referencia_pago || '—'}</strong>
+            ✓ Verifica la referencia <strong>${escapeHTML(v.referencia_pago || '—')}</strong>
             en tu app ${formatMetodo(v.metodo_pago)} y aprueba si es correcto.
           </div>
         ` : ''}
@@ -882,11 +904,18 @@ async function verComprobante(id) {
 function cerrarModal() {
   document.getElementById('modal').style.display = 'none';
   document.getElementById('modal-validacion')?.remove();
+  document.getElementById('modal-pdf').src = 'about:blank';
   ventaModal = null;
 }
 
 function iniciales(nombre) {
-  return nombre.split(' ').slice(0,2).map(p => p[0]).join('').toUpperCase();
+  return String(nombre || '').split(' ').slice(0,2).map(p => p[0]).join('').toUpperCase();
+}
+
+function escapeHTML(value) {
+  const element = document.createElement('span');
+  element.textContent = String(value ?? '');
+  return element.innerHTML;
 }
 
 function formatMetodo(m) {
@@ -920,7 +949,7 @@ function mostrarToast(msg, tipo = 'success') {
     box-shadow:0 8px 28px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.08) inset;
     max-width:90vw;text-align:center;display:flex;align-items:center;gap:10px;
     animation:toastIn .25s ease-out`;
-  t.innerHTML = `<span style="font-size:16px">${e.icon}</span><span>${msg}</span>`;
+  t.innerHTML = `<span style="font-size:16px">${e.icon}</span><span>${escapeHTML(msg)}</span>`;
   document.body.appendChild(t);
 
   if (!document.getElementById('toast-anim-style')) {
